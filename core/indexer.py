@@ -19,7 +19,6 @@ from typing import cast
 
 import lmdb
 import numpy as np
-
 from vortexa.core.chunking import chunk_source
 from vortexa.core.embedding import Embedder, LF4Embedder
 from vortexa.core.language import detect_language, get_extensions
@@ -30,7 +29,7 @@ from vortexa.core.types import (
     IndexStats,
     SearchResult,
 )
-from vortexa.search.search import search_hybrid, search as _search
+from vortexa.search.search import search as _search
 from vortexa.storage.bm25 import BM25Index
 from vortexa.storage.vector_store import VectorStore
 from vortexa.storage.walker import walk_files
@@ -264,26 +263,6 @@ class CodebaseIndexer:
         top_k: int = 10,
         alpha: float | None = None,
     ) -> list[SearchResult]:
-        """Search the index with hybrid semantic + BM25 retrieval."""
-        if not self.chunks:
-            return []
-        return search_hybrid(
-            query=query,
-            model=self._model,
-            store=self.vector_store,
-            bm25_index=self.bm25_index,
-            chunks=self.chunks,
-            chunk_ids=self.chunk_ids,
-            top_k=top_k,
-            alpha=alpha,
-        )
-
-    def search(
-        self,
-        query: str,
-        top_k: int = 10,
-        alpha: float | None = None,
-    ) -> list[SearchResult]:
         """Search with hybrid semantic + BM25 retrieval."""
         if not self.chunks:
             return []
@@ -352,21 +331,16 @@ class CodebaseIndexer:
         """Remove all chunks belonging to the given files."""
         if not file_rels:
             return
-        keep_indices = [i for i, c in enumerate(self.chunks) if c.file_path not in file_rels]
-        self.chunks = [self.chunks[i] for i in keep_indices]
-        self.chunk_ids = [self.chunk_ids[i] for i in keep_indices]
+        remove_ids = [
+            cid for cid, c in zip(self.chunk_ids, self.chunks, strict=False)
+            if c.file_path in file_rels
+        ]
+        self.chunks = [c for c in self.chunks if c.file_path not in file_rels]
+        self.chunk_ids = [cid for cid in self.chunk_ids if cid not in remove_ids]
 
-        # Rebuild vector store
-        store = self._vector_store
-        if keep_indices and store is not None:
-            vectors = store._vectors
-            if len(vectors) > 0:
-                new_vectors = vectors[keep_indices]
-                dim = self._get_dim()
-                new_store = VectorStore(dim=dim)
-                new_store.rebuild(new_vectors, self.chunk_ids)
-                self._vector_store = new_store
-        elif not keep_indices:
+        if remove_ids and self._vector_store is not None:
+            self._vector_store.remove(remove_ids)
+        elif not self.chunks:
             self._vector_store = VectorStore(dim=self._get_dim())
 
     def _compute_stats(self) -> IndexStats:

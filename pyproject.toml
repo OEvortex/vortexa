@@ -57,16 +57,14 @@ Issues = "https://github.com/OEvortex/vortexa/issues"
 [tool.setuptools.packages.find]
 include = ["vortexa*"]
 
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312", "py313", "py314"]
-
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+exclude = [".git", ".venv", "__pycache__", "build", "dist"]
+
+[tool.ruff.lint]
 select = ["E", "W", "F", "I", "B", "C4", "UP"]
 ignore = ["E501", "B008"]
-exclude = [".git", ".venv", "__pycache__", "build", "dist"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

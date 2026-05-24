@@ -67,6 +67,9 @@ class VectorStore:
         self._id_to_idx = dict(zip(ids, range(len(ids)), strict=False))
         self._idx_to_id = dict(zip(range(len(ids)), ids, strict=False))
 
+    def get_id(self, idx: int) -> str | None:
+        return self._idx_to_id.get(idx)
+
     def get_vector(self, chunk_id: str) -> npt.NDArray[np.float32] | None:
         idx = self._id_to_idx.get(chunk_id)
         if idx is None:

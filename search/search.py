@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import numpy as np
 import numpy.typing as npt
-
 from vortexa.core.embedding import Embedder
 from vortexa.core.types import Chunk, Encoder, SearchMode, SearchResult
 from vortexa.search.ranking import (
@@ -46,6 +45,7 @@ def search_semantic(
     model: Encoder | Embedder,
     store: VectorStore,
     chunks: list[Chunk],
+    chunk_ids: list[str],
     top_k: int,
     selector: npt.NDArray[np.int_] | None = None,
 ) -> list[SearchResult]:
@@ -57,10 +57,15 @@ def search_semantic(
     query_vec = query_embedding[0]
     results = store.query(query_vec, k=top_k, selector=selector)
 
-    return [
-        SearchResult(chunk=chunks[idx], score=1.0 - dist, source=SearchMode.SEMANTIC)
-        for idx, dist in results
-    ]
+    # Map store vector indices → chunk IDs → chunks (positions may diverge)
+    id_to_chunk = dict(zip(chunk_ids, chunks, strict=False))
+    out: list[SearchResult] = []
+    for idx, dist in results:
+        cid = store.get_id(idx)
+        if cid is None or cid not in id_to_chunk:
+            continue
+        out.append(SearchResult(chunk=id_to_chunk[cid], score=1.0 - dist, source=SearchMode.SEMANTIC))
+    return out
 
 
 def search_bm25(
@@ -102,7 +107,7 @@ def search_hybrid(
     # Over-fetch candidates so the merged pool is large enough
     candidate_count = top_k * 5
 
-    semantic = search_semantic(query, model, store, chunks, candidate_count, selector)
+    semantic = search_semantic(query, model, store, chunks, chunk_ids, candidate_count, selector)
     semantic_scores: dict[Chunk, float] = {result.chunk: result.score for result in semantic}
 
     # Convert selector to set for BM25

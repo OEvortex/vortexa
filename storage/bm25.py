@@ -10,8 +10,6 @@ import json
 import shutil
 from pathlib import Path
 
-import numpy as np
-
 from vortexa.core.types import Chunk
 from vortexa.search.tokens import enrich_for_bm25, tokenize
 
@@ -104,8 +102,6 @@ class BM25Index:
         :param selector: Optional set of chunk indices to restrict search to.
         :return: List of (chunk_index, score) tuples sorted by score descending.
         """
-        import bm25s
-
         if self._index is None:
             return []
 
@@ -119,7 +115,7 @@ class BM25Index:
 
         # Map results back to chunk indices
         output = []
-        for doc_id, score in zip(results[0], scores[0]):
+        for doc_id, score in zip(results[0], scores[0], strict=False):
             if score <= 0:
                 continue
 

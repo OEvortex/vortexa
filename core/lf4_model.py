@@ -11,9 +11,9 @@ Usage:
 from __future__ import annotations
 
 import json
-import numpy as np
 from pathlib import Path
-from typing import List, Union, Optional, Tuple
+
+import numpy as np
 
 
 class LF4StaticEmbedding:
@@ -65,10 +65,8 @@ class LF4StaticEmbedding:
         return self._tokenizer
 
     @classmethod
-    def from_pretrained(cls, path_or_id: str) -> "LF4StaticEmbedding":
+    def from_pretrained(cls, path_or_id: str) -> LF4StaticEmbedding:
         """Load model from local path or HuggingFace Hub."""
-        from pathlib import Path
-
         p = Path(path_or_id)
         if p.is_dir():
             model_path = str(p / "model.safetensors")
@@ -88,11 +86,11 @@ class LF4StaticEmbedding:
             packed=tensors["embedding_packed"],
             scales=tensors["embedding_scales"],
             zeros=tensors["embedding_zeros"],
-            tokenizer_data=Path(tok_path).read_text(),
+            tokenizer_data=Path(tok_path).read_text(encoding="utf-8"),
             config=config,
         )
 
-    def encode(self, texts: Union[str, List[str]], normalize: bool = True) -> np.ndarray:
+    def encode(self, texts: str | list[str], normalize: bool = True) -> np.ndarray:
         """Encode texts to embeddings.
 
         Args:
@@ -128,7 +126,7 @@ class LF4StaticEmbedding:
         queries: np.ndarray,
         index: np.ndarray,
         top_k: int = 10,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray]:
         """Cosine similarity search.
 
         Args:
