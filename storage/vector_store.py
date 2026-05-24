@@ -12,7 +12,7 @@ import lmdb
 import numpy as np
 import numpy.typing as npt
 
-_LMDB_MAP_SIZE = 10 * 1024 * 1024
+_LMDB_MAP_SIZE = 256 * 1024 * 1024
 _LMDB_MAX_DBS = 10
 
 

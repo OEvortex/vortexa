@@ -389,7 +389,7 @@ class CodebaseIndexer:
         """Persist index state to LMDB."""
         self.index_dir.mkdir(parents=True, exist_ok=True)
         lmdb_path = self.index_dir / "state.lmdb"
-        env = lmdb.open(str(lmdb_path), map_size=10 * 1024 * 1024, max_dbs=10)
+        env = lmdb.open(str(lmdb_path), map_size=256 * 1024 * 1024, max_dbs=10)
         try:
             self.vector_store.save(self.index_dir, env)
 
@@ -422,7 +422,7 @@ class CodebaseIndexer:
         if not lmdb_path.exists():
             return False
 
-        env = lmdb.open(str(lmdb_path), map_size=10 * 1024 * 1024, max_dbs=10)
+        env = lmdb.open(str(lmdb_path), map_size=256 * 1024 * 1024, max_dbs=10)
         try:
             fh_db = env.open_db(b"file_hashes")
             c_db = env.open_db(b"chunks")
