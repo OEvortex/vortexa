@@ -48,7 +48,7 @@ vortexa is a standalone **codebase indexing and semantic search engine** designe
 The result: natural language code search that **understands intent**, not just keywords.
 
 ```python
-results = indexer.search_with_lineage("authentication middleware that validates JWT tokens", top_k=5)
+results = indexer.search("authentication middleware that validates JWT tokens", top_k=5)
 # → Finds the right files even if they use "auth", "verify", "token" instead of "authentication"
 ```
 
@@ -133,7 +133,7 @@ print(f"Languages detected: {stats.languages}")
 ### Search with natural language
 
 ```python
-results = indexer.search_with_lineage("CSV parser implementation", top_k=5)
+results = indexer.search("CSV parser implementation", top_k=5)
 
 for r in results:
     print(f"{r.chunk.file_path}:{r.chunk.start_line}  score={r.score:.3f}")
@@ -188,13 +188,13 @@ stats = indexer.index(force=True)
 
 ```python
 # Hybrid search (auto-weighted semantic + BM25)
-results = indexer.search_with_lineage("error handling", top_k=10)
+results = indexer.search("error handling", top_k=10)
 
 # Pure semantic search
-results = indexer.search_with_lineage("database connection pool", top_k=5, alpha=1.0)
+results = indexer.search("database connection pool", top_k=5, alpha=1.0)
 
 # Pure BM25 keyword search
-results = indexer.search_with_lineage("parse csv", top_k=5, alpha=0.0)
+results = indexer.search("parse csv", top_k=5, alpha=0.0)
 
 # Symbol lookup (find definitions by name)
 results = indexer.find_symbol("ConnectionPool", top_k=5)
@@ -345,7 +345,7 @@ sequenceDiagram
     end
     Indexer-->>User: IndexStats
 
-    User->>Search: search_with_lineage(query)
+    User->>Search: search(query)
     Search->>Store: query(vector)
     Search->>BM25: query(tokens)
     Search->>Search: hybrid_fusion(results)

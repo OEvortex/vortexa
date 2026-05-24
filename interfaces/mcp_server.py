@@ -68,7 +68,7 @@ def search(query: str, top_k: int = 10) -> str:
         top_k: Maximum results to return. Default 10. Use 3-5 for focused queries, 15-20 for broad exploration.
     """
     indexer = _get_indexer()
-    results = indexer.search_with_lineage(query, top_k=top_k)
+    results = indexer.search(query, top_k=top_k)
     return json.dumps(
         [
             {

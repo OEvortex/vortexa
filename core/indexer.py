@@ -30,7 +30,7 @@ from vortexa.core.types import (
     IndexStats,
     SearchResult,
 )
-from vortexa.search.search import search_hybrid, search_with_lineage
+from vortexa.search.search import search_hybrid, search as _search
 from vortexa.storage.bm25 import BM25Index
 from vortexa.storage.vector_store import VectorStore
 from vortexa.storage.walker import walk_files
@@ -278,16 +278,16 @@ class CodebaseIndexer:
             alpha=alpha,
         )
 
-    def search_with_lineage(
+    def search(
         self,
         query: str,
         top_k: int = 10,
         alpha: float | None = None,
     ) -> list[SearchResult]:
-        """Search and return results with full lineage information."""
+        """Search with hybrid semantic + BM25 retrieval."""
         if not self.chunks:
             return []
-        return search_with_lineage(
+        return _search(
             query=query,
             model=self._model,
             store=self.vector_store,

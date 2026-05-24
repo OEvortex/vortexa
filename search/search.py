@@ -133,7 +133,7 @@ def search_hybrid(
     return [SearchResult(chunk=chunk, score=score, source=SearchMode.HYBRID) for chunk, score in ranked]
 
 
-def search_with_lineage(
+def search(
     query: str,
     model: Encoder | Embedder,
     store: VectorStore,
@@ -144,11 +144,7 @@ def search_with_lineage(
     alpha: float | None = None,
     selector: npt.NDArray[np.int_] | None = None,
 ) -> list[SearchResult]:
-    """Search and return results with full lineage information.
-
-    Results include the chunk's lineage field which traces back to the
-    exact source file, line range, and byte offsets (cocoindex-style).
-    """
+    """Search with hybrid semantic + BM25 retrieval and full lineage."""
     results = search_hybrid(
         query=query,
         model=model,
