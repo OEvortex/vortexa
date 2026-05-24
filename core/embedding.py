@@ -133,3 +133,48 @@ class SentenceTransformerEmbedder:
     def memo_key(self) -> tuple:
         """Identity key: (class, model_name, device)."""
         return ("SentenceTransformerEmbedder", self._model_name, self._device)
+
+
+class LF4Embedder:
+    """Thread-safe, lazy-loading embedder wrapping LF4StaticEmbedding (4-bit quantized).
+
+    Uses the VTXAI/Vortex-Embed-4.7M model by default — a 4-bit static embedding
+    model with ~3.5 MB footprint. Loads on first use, cached thereafter.
+    """
+
+    def __init__(self, model_id: str = "VTXAI/Vortex-Embed-4.7M") -> None:
+        self._model_id = model_id
+        self._model = None
+        self._lock = threading.Lock()
+
+    @property
+    def dim(self) -> int:
+        self._ensure_loaded()
+        assert self._model is not None
+        return self._model.dim
+
+    def _ensure_loaded(self) -> None:
+        if self._model is None:
+            with self._lock:
+                if self._model is None:
+                    logger.info("Loading LF4 embedding model: %s", self._model_id)
+                    from vortexa.core.lf4_model import LF4StaticEmbedding
+                    self._model = LF4StaticEmbedding.from_pretrained(self._model_id)
+
+    def embed(self, text: str) -> npt.NDArray[np.float32]:
+        """Embed a single text string."""
+        self._ensure_loaded()
+        assert self._model is not None
+        return self._model.encode([text])[0]
+
+    def embed_batch(self, texts: list[str]) -> npt.NDArray[np.float32]:
+        """Embed a batch of text strings."""
+        if not texts:
+            return np.empty((0, 0), dtype=np.float32)
+        self._ensure_loaded()
+        assert self._model is not None
+        return self._model.encode(texts)
+
+    @property
+    def memo_key(self) -> tuple:
+        return ("LF4Embedder", self._model_id)

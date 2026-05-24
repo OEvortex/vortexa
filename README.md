@@ -431,8 +431,12 @@ graph TD
 | `numpy` | Yes | Vector operations, embedding inference |
 | `lmdb` | Yes | Persistent vector and chunk metadata storage |
 | `pathspec` | Yes | `.gitignore` pattern matching in file walker |
-| `model2vec` | Optional | Fast static embeddings (no GPU needed) |
+| `model2vec` | Optional | Alternative static embeddings |
+| `huggingface-hub` | Yes (default model) | Loading `VTXAI/Vortex-Embed-4.7M` |
+| `tokenizers` | Yes (default model) | HF tokenizer for embedding model |
+| `safetensors` | Yes (default model) | Safe tensor loading for 4-bit weights |
 | `sentence-transformers` | Optional | Transformer-based dense embeddings |
+| `model2vec` | Optional | Alternative static embeddings |
 | `tree-sitter-language-pack` | Optional | AST-aware code chunking |
 | `fastmcp` | Optional | MCP server for LLM tool integration |
 
