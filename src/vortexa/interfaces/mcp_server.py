@@ -79,7 +79,7 @@ def search(query: str, top_k: int = 10) -> str:
                 "file": r.chunk.file_path,
                 "lines": f"{r.chunk.start_line}-{r.chunk.end_line}",
                 "score": round(r.score, 4),
-                "content": r.chunk.content[:50],
+                "content": r.chunk.content[:500],
             }
             for r in results
         ],
@@ -95,7 +95,7 @@ def run_server() -> None:
     watcher = IndexWatcher(indexer)
     watcher.start()
     print("[vortexa] Auto-reindex watcher started (polling every 3s)", file=sys.stderr)
-    mcp.run(transport="stdio")
+    mcp.run(transport="stdio", show_banner=False)
 
 
 if __name__ == "__main__":
