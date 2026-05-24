@@ -39,6 +39,12 @@ full = [
     "sentence-transformers>=2.2.0",
     "tree-sitter-language-pack>=0.1.0",
 ]
+mcp = [
+    "fastmcp>=2.0.0",
+]
+
+[project.scripts]
+vortexa-mcp = "vortexa.interfaces.mcp_server:run_server"
 
 [project.urls]
 Homepage = "https://github.com/OEvortex/vortexa"
