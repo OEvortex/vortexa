@@ -8,7 +8,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-brightgreen)](#)
-[![PyPI version](https://img.shields.io/badge/pypi-v0.1.0-orange)](#)
+[![PyPI version](https://img.shields.io/pypi/v/vortexa)](https://pypi.org/project/vortexa/)
 
 </div>
 
