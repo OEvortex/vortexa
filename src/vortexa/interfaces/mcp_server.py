@@ -8,8 +8,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
+
+os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
 from fastmcp import FastMCP
 
@@ -39,7 +42,8 @@ def _get_indexer():
         _indexer = CodebaseIndexer(root=cwd)
         stats = _indexer.index()
         print(
-            f"[vortexa] Ready: {stats.indexed_files} files, {stats.total_chunks} chunks",
+            f"[vortexa] Ready: {stats.indexed_files} files, "
+            f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
             file=sys.stderr,
         )
     return _indexer

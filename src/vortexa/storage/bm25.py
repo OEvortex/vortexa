@@ -30,6 +30,8 @@ class BM25Index:
         :param chunk_ids: Corresponding chunk IDs.
         :param persist_dir: Optional directory to persist the index.
         """
+        import os
+        os.environ["TQDM_DISABLE"] = "1"
         import bm25s
 
         self._corpus_ids = chunk_ids

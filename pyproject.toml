@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vortexa"
-version = "0.1.0"
+version = "0.1.1"
 description = "Codebase indexing and semantic search engine"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,6 +54,7 @@ Repository = "https://github.com/OEvortex/vortexa"
 Issues = "https://github.com/OEvortex/vortexa/issues"
 
 [tool.setuptools.packages.find]
+where = ["src"]
 include = ["vortexa*"]
 
 [tool.ruff]

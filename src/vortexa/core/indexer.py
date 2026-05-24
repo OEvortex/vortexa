@@ -13,6 +13,7 @@ import contextlib
 import hashlib
 import json
 import logging
+import time
 from collections import Counter
 from pathlib import Path
 from typing import cast
@@ -147,6 +148,7 @@ class CodebaseIndexer:
         :param chunk_config: Override chunking config for this index run.
         :return: Index statistics.
         """
+        _t0 = time.perf_counter()
         config = chunk_config or self.chunk_config
         extensions = get_extensions(include_text_files)
 
@@ -248,12 +250,22 @@ class CodebaseIndexer:
         # Save state
         self._save_state()
 
+        elapsed = time.perf_counter() - _t0
         stats = self._compute_stats()
+        stats = IndexStats(
+            indexed_files=stats.indexed_files,
+            total_chunks=stats.total_chunks,
+            languages=stats.languages,
+            memo_hits=stats.memo_hits,
+            memo_misses=stats.memo_misses,
+            index_time_ms=round(elapsed * 1000, 1),
+        )
         logger.info(
-            "Index complete: %d files, %d chunks (%d memo hits)",
+            "Index complete: %d files, %d chunks (%d memo hits) in %.1fms",
             stats.indexed_files,
             stats.total_chunks,
             stats.memo_hits,
+            stats.index_time_ms,
         )
         return stats
 

@@ -95,3 +95,4 @@ class IndexStats:
     languages: dict[str, int] = field(default_factory=dict)
     memo_hits: int = 0  # Chunks skipped due to memoization
     memo_misses: int = 0  # Chunks re-embedded
+    index_time_ms: float = 0  # Elapsed wall-clock time for the index run
