@@ -9,6 +9,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.10+-brightgreen)](#)
 [![PyPI version](https://img.shields.io/pypi/v/vortexa)](https://pypi.org/project/vortexa/)
+[![PyPI downloads](https://img.shields.io/pypi/dm/vortexa)](https://pypi.org/project/vortexa/)
 
 </div>
 
@@ -114,8 +115,8 @@ pip install vortexa
 # Full (Model2Vec embeddings + tree-sitter AST chunking)
 pip install "vortexa[full]"
 
-# With MCP server support
-pip install "vortexa[full]" fastmcp
+# With MCP server support (adds `vortexa` CLI command)
+pip install "vortexa[mcp]"
 ```
 
 ### Index a codebase
@@ -254,7 +255,7 @@ vortexa ships with a built-in **MCP (Model Context Protocol) server** that expos
 python -m vortexa.interfaces.mcp_server
 
 # Or via the installed entry point
-vortexa-mcp
+vortexa
 ```
 
 On startup it indexes the current working directory and prints stats to stderr:
