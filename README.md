@@ -25,6 +25,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
   - [Searching](#searching)
   - [Watch Mode](#watch-mode)
   - [Management](#management)
+- [CLI Search](#cli-search)
 - [MCP Server](#mcp-server)
   - [Usage with Claude Code / Cursor](#usage-with-claude-code--cursor)
 - [Architecture](#architecture)
@@ -115,7 +116,7 @@ pip install vortexa
 # Full (Model2Vec embeddings + tree-sitter AST chunking)
 pip install "vortexa[full]"
 
-# With MCP server support (adds `vortexa` CLI command)
+# With MCP server support
 pip install "vortexa[mcp]"
 ```
 
@@ -244,6 +245,63 @@ indexer.clear()   # Delete the persistent index
 
 <div align="center">
 
+## CLI Search
+
+</div>
+
+The installed `vortexa` command can also search a codebase directly:
+
+```bash
+# Search the current working directory
+vortexa -q "authentication middleware that validates JWT tokens"
+
+# Search a specific codebase root
+vortexa -q "CSV parser implementation" /path/to/project
+
+# Pass Kilo-style environment details; `Working directory` is used as the root
+vortexa -q "error handling" "Working directory: /path/to/project
+Workspace root folder: /"
+```
+
+Useful flags:
+
+| Flag | Description |
+|------|-------------|
+| `-q`, `--query` | Search query. Quote multi-word queries. |
+| `--root` | Codebase root to index and search. Overrides `environment_details`. |
+| `--top-k` | Maximum number of results to return. Default: `10`. |
+| `--alpha` | Semantic weight from `0.0` to `1.0`; defaults to adaptive weighting. |
+| `--include-text` | Include text files such as `.md`, `.json`, and `.yaml` in the index. |
+| `--force` | Force a full re-index before searching. |
+| `--no-index` | Search the existing index only. |
+| `--plain` | Print human-readable results instead of JSON. |
+
+By default CLI output is JSON:
+
+```json
+[
+  {
+    "file": "src/auth/middleware.py",
+    "lines": "12-48",
+    "score": 0.892,
+    "source": "hybrid",
+    "content": "def validate_jwt(token: str) -> User: ..."
+  }
+]
+```
+
+The `vortexa` command still starts the MCP server when no query is provided. You can also start the server explicitly:
+
+```bash
+vortexa serve
+# or
+vortexa-serve
+```
+
+---
+
+<div align="center">
+
 ## MCP Server
 
 </div>
@@ -255,7 +313,7 @@ vortexa ships with a built-in **MCP (Model Context Protocol) server** that expos
 python -m vortexa.interfaces.mcp_server
 
 # Or via the installed entry point
-vortexa
+vortexa serve
 ```
 
 On startup it indexes the current working directory and prints stats to stderr:
@@ -316,6 +374,7 @@ vortexa/
 │   ├── ranking.py       # Result ranking & symbol query detection
 │   └── tokens.py        # Identifier tokenization (camelCase, snake_case)
 └── interfaces/
+    ├── cli.py           # Command-line search entrypoint
     ├── mcp_server.py    # MCP server (stdio transport)
     └── watcher.py       # Live file poller with debounced auto-reindex
 ```
@@ -396,6 +455,7 @@ graph TD
     end
 
     subgraph "Interfaces"
+        CLI["interfaces.cli<br/>Command-line search"]
         MCP["interfaces.mcp_server<br/>FastMCP server"]
         Watcher["interfaces.watcher<br/>IndexWatcher"]
     end
@@ -414,6 +474,7 @@ graph TD
     Search --> BM25
     Search --> Types
 
+    CLI --> Indexer
     MCP --> Indexer
     MCP --> Watcher
     Watcher --> Walker
@@ -431,6 +492,7 @@ graph TD
 |---------|----------|----------|
 | `numpy` | Yes | Vector operations, embedding inference |
 | `lmdb` | Yes | Persistent vector and chunk metadata storage |
+| `bm25s` | Yes | Fast BM25 keyword index and persistence |
 | `pathspec` | Yes | `.gitignore` pattern matching in file walker |
 | `model2vec` | Optional | Alternative static embeddings |
 | `huggingface-hub` | Yes (default model) | Loading `VTXAI/Vortex-Embed-4.7M` |

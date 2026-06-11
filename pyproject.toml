@@ -47,7 +47,8 @@ mcp = [
 ]
 
 [project.scripts]
-vortexa = "vortexa.interfaces.mcp_server:run_server"
+vortexa = "vortexa.interfaces.cli:main"
+vortexa-serve = "vortexa.interfaces.mcp_server:run_server"
 
 [project.urls]
 Homepage = "https://github.com/OEvortex/vortexa"
