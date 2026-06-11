@@ -61,7 +61,7 @@ class Model2VecEmbedder:
         if self._model is None:
             with self._lock:
                 if self._model is None:  # Double-checked locking
-                    from model2vec import StaticModel
+                    from model2vec import StaticModel  # ty: ignore[unresolved-import]
                     logger.info("Loading embedding model: %s", self._model_id)
                     self._model = StaticModel.from_pretrained(self._model_id)
 
@@ -111,7 +111,7 @@ class SentenceTransformerEmbedder:
         if self._model is None:
             with self._lock:
                 if self._model is None:
-                    from sentence_transformers import SentenceTransformer
+                    from sentence_transformers import SentenceTransformer  # ty: ignore[unresolved-import]
                     logger.info("Loading sentence-transformers model: %s", self._model_name)
                     self._model = SentenceTransformer(self._model_name, device=self._device)
 
