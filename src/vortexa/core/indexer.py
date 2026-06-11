@@ -42,6 +42,19 @@ _MAX_FILE_BYTES = 1_000_000  # 1 MB
 # Hash of the chunking logic for memoization — bump when chunking changes
 _CHUNKING_LOGIC_VERSION = "2"
 
+_GLOBAL_INDEX_ROOT = Path.home() / ".vortexa"
+
+
+def _index_dir_for_root(root: Path) -> Path:
+    """Derive the global index directory for a given project root.
+
+    Stores under ``~/.vortexa/<hex_hash>/`` where *hex_hash* is the first
+    16 chars of the SHA-256 of the resolved absolute path.  This keeps every
+    indexed project isolated while avoiding path-length issues.
+    """
+    path_hash = hashlib.sha256(str(root).encode()).hexdigest()[:16]
+    return _GLOBAL_INDEX_ROOT / path_hash
+
 
 def _file_hash(path: Path) -> str:
     """Compute SHA256 hash of file contents."""
@@ -80,11 +93,11 @@ class CodebaseIndexer:
         :param root: Root directory of the codebase to index.
         :param model: Embedding model (Encoder or Embedder). Created from model_id if None.
         :param model_id: Model ID for auto-creating embedder (ignored if model provided).
-        :param index_dir: Directory for persistent storage. Defaults to .jarvis/index/.
+        :param index_dir: Directory for persistent storage. Defaults to ~/.vortexa/<hash>/.
         :param chunk_config: Chunking configuration.
         """
         self.root = Path(root).resolve()
-        self.index_dir = Path(index_dir) if index_dir else self.root / ".jarvis" / "index"
+        self.index_dir = Path(index_dir) if index_dir else _index_dir_for_root(self.root)
         self.chunk_config = chunk_config or ChunkConfig()
 
         # Resolve model: prefer explicit model, else create LF4Embedder

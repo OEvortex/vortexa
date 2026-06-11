@@ -14,7 +14,7 @@ from pathlib import Path
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
 
-from fastmcp import FastMCP  # ty: ignore[unresolved-import]
+from fastmcp import FastMCP  # ty: ignore[unresolved-import, unused-ignore-comment]
 
 logger = logging.getLogger(__name__)
 

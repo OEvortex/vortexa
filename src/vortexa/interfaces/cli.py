@@ -8,7 +8,7 @@ import logging
 import sys
 from pathlib import Path
 
-from vortexa.core.indexer import CodebaseIndexer
+from vortexa.core.indexer import CodebaseIndexer, _index_dir_for_root
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "environment_details",
         nargs="?",
-        help="optional root path, JSON environment details, or Kilo environment details",
+        help="optional root path, JSON environment details, or text containing a root path to index and search (defaults to current directory)",
     )
     parser.add_argument(
         "--root",
@@ -138,12 +138,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="force a full re-index before searching",
+        help="force a full re-index before searching (ignores existing index)",
     )
     parser.add_argument(
         "--no-index",
         action="store_true",
-        help="skip indexing and search the existing index only",
+        help="skip indexing entirely and search the existing index (errors if none)",
     )
     parser.add_argument(
         "--plain",
@@ -151,6 +151,12 @@ def _build_parser() -> argparse.ArgumentParser:
         help="print human-readable results instead of JSON",
     )
     return parser
+
+
+def _has_existing_index(root: Path) -> bool:
+    """Check if a persistent index already exists for this root."""
+    index_dir = _index_dir_for_root(root)
+    return (index_dir / "state.lmdb").exists()
 
 
 def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
@@ -167,15 +173,48 @@ def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         parser.error(str(exc))
     indexer = CodebaseIndexer(root=root)
 
+    has_index = _has_existing_index(root)
+
     if args.no_index:
+        if not has_index:
+            raise SystemExit(
+                f"No index found for {root}. Run without --no-index to build one."
+            )
         indexer._load_state()
-    else:
-        stats = indexer.index(force=args.force, include_text_files=args.include_text)
+        print(f"[vortexa] Loaded existing index ({len(indexer.chunks)} chunks)", file=sys.stderr)
+    elif args.force:
+        stats = indexer.index(force=True, include_text_files=args.include_text)
         print(
-            f"[vortexa] Ready: {stats.indexed_files} files, "
+            f"[vortexa] Re-indexed: {stats.indexed_files} files, "
             f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
             file=sys.stderr,
         )
+    else:
+        if not has_index:
+            stats = indexer.index(include_text_files=args.include_text)
+            print(
+                f"[vortexa] Indexed: {stats.indexed_files} files, "
+                f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
+                file=sys.stderr,
+            )
+        else:
+            indexer._load_state()
+            before = len(indexer.chunks)
+            stats = indexer.index(include_text_files=args.include_text)
+            after = len(indexer.chunks)
+            if after == before and stats.memo_misses == 0:
+                print(
+                    f"[vortexa] Index up to date ({after} chunks, no changes)",
+                    file=sys.stderr,
+                )
+            else:
+                added = after - before
+                label = f"+{added} chunks" if added else f"{stats.memo_misses} updated"
+                print(
+                    f"[vortexa] Updated: {stats.indexed_files} files, "
+                    f"{after} chunks ({label}) in {stats.index_time_ms:.0f}ms",
+                    file=sys.stderr,
+                )
 
     query = args.query
     results = indexer.search(query, top_k=args.top_k, alpha=args.alpha)

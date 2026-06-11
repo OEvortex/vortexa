@@ -8,4 +8,4 @@ build/
 venv/
 src/vortexa.egg-info/
 .ruff_cache/
-.jarvis
+.jarvis/

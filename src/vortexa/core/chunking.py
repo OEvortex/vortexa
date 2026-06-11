@@ -31,7 +31,7 @@ class ChunkBoundary:
 def _get_parser(language: str):
     """Get a tree-sitter parser for the given language. Returns None if unavailable."""
     try:
-        from tree_sitter_language_pack import get_parser as _get_ts_parser  # ty: ignore[unresolved-import]
+        from tree_sitter_language_pack import get_parser as _get_ts_parser
 
         return _get_ts_parser(language)
     except Exception:

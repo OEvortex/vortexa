@@ -34,7 +34,6 @@ _DEFAULT_IGNORED_DIRS: frozenset[str] = frozenset(
         "dist/",
         "build/",
         ".eggs/",
-        ".jarvis/",
     }
 )
 
