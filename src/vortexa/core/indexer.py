@@ -84,7 +84,7 @@ class CodebaseIndexer:
         self,
         root: str | Path,
         model: Encoder | Embedder | None = None,
-        model_id: str = "VTXAI/Vortex-Embed-4.7M",
+        model_id: str = "VTXAI/Vortex-Embed-v3-sentence",
         index_dir: str | Path | None = None,
         chunk_config: ChunkConfig | None = None,
     ) -> None:
@@ -100,7 +100,7 @@ class CodebaseIndexer:
         self.index_dir = Path(index_dir) if index_dir else _index_dir_for_root(self.root)
         self.chunk_config = chunk_config or ChunkConfig()
 
-        # Resolve model: prefer explicit model, else create LF4Embedder
+        # Resolve model: prefer explicit model, else create VortexEmbedderV3
         if model is not None:
             if isinstance(model, Embedder):
                 self._embedder: Embedder | None = model
@@ -109,7 +109,8 @@ class CodebaseIndexer:
                 self._embedder = None
                 self._model = model
         else:
-            self._embedder = LF4Embedder(model_id)
+            from vortexa.core.v3_embedder import VortexEmbedderV3
+            self._embedder = VortexEmbedderV3(model_id)
             self._model = self._embedder
 
         # In-memory state
