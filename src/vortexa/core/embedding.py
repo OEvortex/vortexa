@@ -61,7 +61,7 @@ class Model2VecEmbedder:
         if self._model is None:
             with self._lock:
                 if self._model is None:  # Double-checked locking
-                    from model2vec import StaticModel  # ty: ignore[unresolved-import]
+                    from model2vec import StaticModel
                     logger.info("Loading embedding model: %s", self._model_id)
                     self._model = StaticModel.from_pretrained(self._model_id)
 
@@ -111,7 +111,7 @@ class SentenceTransformerEmbedder:
         if self._model is None:
             with self._lock:
                 if self._model is None:
-                    from sentence_transformers import SentenceTransformer  # ty: ignore[unresolved-import]
+                    from sentence_transformers import SentenceTransformer
                     logger.info("Loading sentence-transformers model: %s", self._model_name)
                     self._model = SentenceTransformer(self._model_name, device=self._device)
 
@@ -158,8 +158,8 @@ class LF4Embedder:
             with self._lock:
                 if self._model is None:
                     logger.info("Loading LF4 embedding model: %s", self._model_id)
-                    from vortexa.core.lf4_model import LF4StaticEmbedding
-                    self._model = LF4StaticEmbedding.from_pretrained(self._model_id)
+                    from vortexa.core.lf4_model import VortexEmbedV3
+                    self._model = VortexEmbedV3.from_pretrained(self._model_id)
 
     def embed(self, text: str) -> npt.NDArray[np.float32]:
         """Embed a single text string."""

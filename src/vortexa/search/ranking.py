@@ -6,6 +6,7 @@ Handles:
 - Multi-chunk file promotion (files with multiple relevant chunks)
 - File saturation decay (prevent single files from dominating)
 - Alpha auto-detection (symbol queries vs natural language)
+- Structural boost (import proximity, test relationships, reference density)
 """
 
 from __future__ import annotations
