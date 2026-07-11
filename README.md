@@ -7,11 +7,17 @@
 _Knowledge graph · hybrid search · context expansion · MCP server · AST-aware chunking_
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.10+-brightgreen)](#)
-[![PyPI version](https://img.shields.io/badge/pypi/v/vortexa)](https://pypi.org/project/vortexa/)
-[![PyPI downloads](https://img.shields.io/badge/pypi/dm/vortexa)](https://pypi.org/project/vortexa/)
+[![Python](https://img.shields.io/badge/python-3.10%2B-brightgreen)](https://www.python.org)
+[![PyPI version](https://img.shields.io/badge/pypi-vortexa-blue)](https://pypi.org/project/vortexa/)
+[![Status](https://img.shields.io/badge/status-beta-orange)](https://pypi.org/project/vortexa/)
 
 </div>
+
+> Ask your codebase questions instead of grepping it. vortexa turns a repository
+> into a persistent, agent-first **context engine**: semantic + keyword hybrid
+> search over a multi-level vector index, a structural knowledge graph, automatic
+> context expansion, and a weighted **Vortex Score** — all exposed through a Python
+> API, a CLI, and an MCP server.
 
 ---
 
@@ -19,17 +25,20 @@ _Knowledge graph · hybrid search · context expansion · MCP server · AST-awar
 
 - [Overview](#overview)
 - [Features](#features)
+- [Installation](#installation)
 - [Quick Start](#quick-start)
+  - [Index a codebase](#index-a-codebase)
+  - [Search in natural language](#search-in-natural-language)
+  - [Resolve full context (for agents)](#resolve-full-context-for-agents)
+- [Documentation](#documentation)
 - [Python API](#python-api)
   - [Indexing](#indexing)
   - [Searching](#searching)
-  - [Knowledge Graph & Context Expansion](#knowledge-graph--context-expansion)
-  - [Watch Mode](#watch-mode)
+  - [Knowledge graph & context expansion](#knowledge-graph--context-expansion)
+  - [Watch mode](#watch-mode)
   - [Management](#management)
-- [CLI Search](#cli-search)
+- [CLI](#cli)
 - [MCP Server](#mcp-server)
-  - [Tools](#tools)
-  - [Usage with Claude Code / Cursor](#usage-with-claude-code--cursor)
 - [Architecture](#architecture)
 - [Dependencies](#dependencies)
 - [License](#license)
@@ -42,17 +51,22 @@ _Knowledge graph · hybrid search · context expansion · MCP server · AST-awar
 
 </div>
 
-vortexa is an agent-first **codebase context engine** that combines dense retrieval, sparse retrieval, and a structural knowledge graph into a single persistent index. It is designed for AI agents and developers who want to **ask the codebase questions**, not just grep it.
+vortexa is an **agent-first codebase context engine**. On top of a hybrid
+dense (semantic) + sparse (BM25) index, it builds:
 
-On top of a hybrid dense + BM25 index, vortexa builds:
-
-- a **knowledge graph** of files, classes, functions, methods, and symbols with import / call / containment edges;
+- a **knowledge graph** of files, classes, functions, methods, and symbols with
+  `import` / `call` / `containment` edges;
 - a **multi-level vector index** at file, function, and symbol granularity;
-- **context expansion** that pulls in tests, importers, callers, callees, and sibling modules;
-- a learned-style **vortex score** that fuses semantic similarity, BM25, filename signals, graph signals, and structural importance;
-- a **session memory** that tracks agent queries and visited symbols across MCP turns.
+- **context expansion** that pulls in tests, importers, callers, callees, and
+  sibling modules;
+- a weighted **Vortex Score** that fuses semantic similarity, BM25, filename
+  signals, graph signals, and structural importance into a single ranking;
+- a **session memory** that tracks agent queries and visited symbols across MCP
+  turns.
 
-The result: a single MCP call can hand an agent a complete `ContextPack` — primary results plus the related code an LLM needs to actually answer the question — rather than a flat list of file:line hits.
+The result is that a single call hands an agent a complete `ContextPack` —
+primary results *plus* the surrounding code an LLM needs to actually answer the
+question — instead of a flat list of `file:line` hits.
 
 ```python
 results = indexer.search("authentication middleware that validates JWT tokens", top_k=5)
@@ -62,7 +76,8 @@ pack = indexer.resolve("where is JWT validation implemented?", top_k=5)
 # → Primary results + tests + importers + callees + graph expansion, formatted for an agent
 ```
 
-vortexa can run as a **standalone Python library**, be embedded into any agent, or serve as an **MCP server** for LLM tools.
+vortexa runs as a **standalone Python library**, can be embedded into any agent,
+or serves as an **MCP server** for LLM tools.
 
 ---
 
@@ -72,60 +87,54 @@ vortexa can run as a **standalone Python library**, be embedded into any agent, 
 
 </div>
 
-<table>
-<tr>
-<td><strong>Semantic search</strong></td>
-<td>Find code by describing what it does in natural language — no exact-string matching needed.</td>
-</tr>
-<tr>
-<td><strong>Hybrid retrieval</strong></td>
-<td>Combines dense embeddings (semantic meaning) with BM25 (keyword precision) using adaptive alpha weighting.</td>
-</tr>
-<tr>
-<td><strong>Knowledge graph</strong></td>
-<td>Per-repo graph of files, classes, functions, methods, and symbols with import / call / containment edges. Traverse, query by seed, or compute shortest paths.</td>
-</tr>
-<tr>
-<td><strong>Context expansion</strong></td>
-<td>Given primary results, automatically expands to include tests, importers, callers, callees, and sibling modules — packaged as a structured <code>ContextPack</code>.</td>
-</tr>
-<tr>
-<td><strong>Vortex score</strong></td>
-<td>Weighted fusion of semantic similarity, BM25, filename / path signal, symbol signal, graph proximity, import signal, and structural importance.</td>
-</tr>
-<tr>
-<td><strong>Multi-level indexing</strong></td>
-<td>Three separate vector indexes — file, function, symbol — for granular lookup. Each index has its own metadata.</td>
-</tr>
-<tr>
-<td><strong>AST-aware chunking</strong></td>
-<td>Splits source code at function/class/block boundaries using tree-sitter when available, falls back to line-based splitting. Supports 35+ languages.</td>
-</tr>
-<tr>
-<td><strong>Incremental indexing</strong></td>
-<td>Content-hash memoization means only changed files are re-indexed. Full re-index avoids redundant embedding computations.</td>
-</tr>
-<tr>
-<td><strong>Persistent storage</strong></td>
-<td>LMDB-backed vector store survives restarts. Embedding cache avoids recomputing identical content.</td>
-</tr>
-<tr>
-<td><strong>Session memory</strong></td>
-<td>Tracks agent queries, visited symbols, and recent result files across MCP turns to boost recall of recently-touched code.</td>
-</tr>
-<tr>
-<td><strong>Live watch mode</strong></td>
-<td>Background thread (native inotify/FSEvents via <code>watchfiles</code>, or polling fallback) auto-re-indexes with configurable debounce.</td>
-</tr>
-<tr>
-<td><strong>MCP server</strong></td>
-<td>11 tools across search, graph, and lifecycle — pluggable into Claude Code, Cursor, and any MCP-compatible agent.</td>
-</tr>
-<tr>
-<td><strong>Zero mandatory heavy deps</strong></td>
-<td>Core requires only <code>numpy</code>, <code>lmdb</code>, <code>bm25s</code>, <code>pathspec</code>, and the default LF4 embedding model. Model2Vec and tree-sitter are optional extras.</td>
-</tr>
-</table>
+| Capability | What it gives you |
+|------------|-------------------|
+| **Semantic search** | Find code by describing what it does in natural language — no exact-string matching required. |
+| **Hybrid retrieval** | Combines dense embeddings (meaning) with BM25 (keyword precision) using adaptive alpha weighting. |
+| **Knowledge graph** | Per-repo graph of files, classes, functions, methods, and symbols with import / call / containment edges. Traverse, query by seed, or compute shortest paths. |
+| **Context expansion** | Given primary results, automatically expands to include tests, importers, callers, callees, and sibling modules — packaged as a structured `ContextPack`. |
+| **Vortex Score** | Weighted fusion of semantic similarity, BM25, filename / path signal, symbol signal, graph proximity, import signal, and structural importance. |
+| **Multi-level indexing** | Three separate vector indexes — file, function, symbol — for granular lookup, each backed by LMDB. |
+| **AST-aware chunking** | Splits source at function/class/block boundaries using tree-sitter when available, with line-based fallback. Supports 100+ file extensions across 35+ languages. |
+| **Incremental indexing** | Content-hash memoization means only changed files are re-embedded; full re-index avoids redundant work. |
+| **Persistent storage** | LMDB-backed vector store, BM25 index, knowledge graph, and session memory survive restarts. |
+| **Session memory** | Tracks agent queries, visited symbols, and recent result files across MCP turns to boost recall of recently-touched code. |
+| **Live watch mode** | Background thread (native `inotify`/`FSEvents` via `watchfiles`, or polling fallback) auto-re-indexes with debounce. |
+| **MCP server** | 11 tools across search, graph, and lifecycle — pluggable into Claude Code, Cursor, and any MCP-compatible agent. |
+| **Zero mandatory heavy deps** | Core needs only `numpy`, `lmdb`, `bm25s`, `pathspec`, `huggingface-hub`, `tokenizers`, `safetensors`, and `fastmcp`. Model2Vec / SentenceTransformers / tree-sitter are optional extras. |
+
+---
+
+<div align="center">
+
+## Installation
+
+</div>
+
+The MCP server and the default `VTXAI/Vortex-Embed-4.7M` embedding model are
+included in the base install, so the library, CLI, and `vortexa serve` work out
+of the box with no extra dependencies.
+
+```bash
+# Core: hybrid search + LF4 embeddings + line-based chunking + MCP server
+pip install vortexa
+
+# Full: adds Model2Vec + SentenceTransformers + tree-sitter AST chunking
+pip install "vortexa[full]"
+
+# Everything (alias for the full feature set)
+pip install "vortexa[full]"
+```
+
+Optional extras:
+
+```bash
+pip install "vortexa[full]"    # model2vec + sentence-transformers + tree-sitter-language-pack
+```
+
+> **Note:** `fastmcp` is a *required* dependency of the base package, so the MCP
+> server is always available — `vortexa[mcp]` is retained for backwards
+> compatibility but is equivalent to the base install.
 
 ---
 
@@ -134,22 +143,6 @@ vortexa can run as a **standalone Python library**, be embedded into any agent, 
 ## Quick Start
 
 </div>
-
-### Installation
-
-```bash
-# Core (BM25 + LF4 embeddings + line-based chunking)
-pip install vortexa
-
-# Full (Model2Vec embeddings + tree-sitter AST chunking)
-pip install "vortexa[full]"
-
-# With MCP server support
-pip install "vortexa[mcp]"
-
-# Everything
-pip install "vortexa[full,mcp]"
-```
 
 ### Index a codebase
 
@@ -165,7 +158,7 @@ print(f"Languages detected: {stats.languages}")
 print(f"Index time: {stats.index_time_ms:.0f} ms")
 ```
 
-### Search with natural language
+### Search in natural language
 
 ```python
 results = indexer.search("CSV parser implementation", top_k=5)
@@ -176,8 +169,7 @@ for r in results:
     print()
 ```
 
-Output:
-```
+```text
 src/parsers/csv_parser.py:42  score=0.892
   def parse_csv(filepath: str, delimiter: str = ",") -> list[dict]:
       """Parse a CSV file into a list of dictionaries."""
@@ -188,6 +180,40 @@ tests/test_csv_parser.py:15  score=0.756
       result = parse_csv("test.csv")
       assert len(result) == 3
 ```
+
+### Resolve full context (for agents)
+
+```python
+pack = indexer.resolve("how are JWT tokens validated?", top_k=5)
+print(indexer.format_context(pack))
+# pack.primary_chunks  — top-scoring chunks
+# pack.test_files      — test files for the primary results
+# pack.imports         — modules imported by primary results
+# pack.imported_by     — modules that import the primary results
+# pack.callers         — callers of the primary symbols
+# pack.callees         — callees of the primary symbols
+# pack.symbols         — symbol definitions
+# pack.dependency_chain— dependency chain
+```
+
+---
+
+<div align="center">
+
+## Documentation
+
+</div>
+
+Detailed, in-depth documentation lives in the [`docs/`](docs/) directory:
+
+- [Getting Started](docs/getting-started.md) — install, quick start, configuration, project layout
+- [Architecture](docs/architecture.md) — data flow, module layout, indexing pipeline, persistence
+- [Python API Reference](docs/python-api.md) — `CodebaseIndexer`, types, and the public surface
+- [CLI Reference](docs/cli.md) — `search`, `resolve`, `explain`, `serve`, and the legacy `-q` mode
+- [MCP Server](docs/mcp-server.md) — the 11 tools and integration with Claude Code / Cursor
+- [Knowledge Graph & Scoring](docs/knowledge-graph.md) — graph model, context expansion, Vortex Score, session memory
+- [Embedding Models](docs/embeddings.md) — the default LF4 model and how to swap embedders
+- [Contributing](docs/contributing.md) — development setup, tests, and conventions
 
 ---
 
@@ -203,23 +229,24 @@ tests/test_csv_parser.py:15  score=0.756
 from vortexa.core.indexer import CodebaseIndexer
 from vortexa.core.types import ChunkConfig
 
-# Default chunking (aim for 50-line chunks, 5-line overlap)
+# Default chunking (target ~1500 characters per chunk, 200-char overlap)
 indexer = CodebaseIndexer(root="/path/to/project")
 stats = indexer.index()
 # → IndexStats(indexed_files=127, total_chunks=843, languages={"python": 45, ...})
 
-# Custom chunk configuration
+# Custom chunk configuration (size/overlap are measured in characters)
 indexer = CodebaseIndexer(
     root=".",
-    chunk_config=ChunkConfig(chunk_size=100, chunk_overlap=10),
+    chunk_config=ChunkConfig(chunk_size=2000, chunk_overlap=300),
 )
 stats = indexer.index(force=False, include_text_files=True)
 
-# Force full re-index
+# Force a full re-index
 stats = indexer.index(force=True)
 ```
 
-After indexing, `indexer.graph` holds the knowledge graph and `indexer.session` tracks query history.
+After indexing, `indexer.graph` holds the knowledge graph and `indexer.session`
+tracks query history.
 
 ### Searching
 
@@ -243,7 +270,8 @@ results = indexer.find_symbol("ConnectionPool", top_k=5)
 results = indexer.find_related(chunk_idx=3, top_k=5)
 ```
 
-Each result is a `SearchResult` (or `SearchResultWithContext` when `hybrid=True`):
+Each result is a `SearchResult` (or a `SearchResultWithContext` when
+`hybrid=True`):
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -252,50 +280,46 @@ Each result is a `SearchResult` (or `SearchResultWithContext` when `hybrid=True`
 | `chunk.end_line` | `int` | End line number |
 | `chunk.content` | `str` | Code snippet (up to 500 chars) |
 | `chunk.language` | `str` | Detected programming language |
-| `chunk.lineage` | `Lineage` | Source path + byte offsets |
 | `chunk.chunk_hash` | `str` | Content hash for memoization |
 | `score` | `float` | Final vortex score (0–1) |
-| `source` | `str` | `"semantic"`, `"bm25"`, or `"hybrid"` |
+| `source` | `SearchMode` | `semantic`, `bm25`, `hybrid`, or `symbol` |
 | `context` | `GraphContext?` | Present when `hybrid=True`; key symbol + 1 incoming + 1 outgoing edge |
 
-### Knowledge Graph & Context Expansion
-
-Vortexa indexes every file, class, function, method, and symbol into an in-memory knowledge graph and persists it next to the chunks. You can traverse it directly or use the high-level helpers:
+### Knowledge graph & context expansion
 
 ```python
 # Inspect the graph
 print(indexer.graph.node_count, "nodes,", indexer.graph.edge_count, "edges")
+
+# Most-connected architectural hubs (excludes file-level hub nodes)
+hubs = indexer.get_god_nodes(top_n=10)
+for h in hubs:
+    print(h["label"], h["kind"], h["degree"])
 
 # Find a node by name
 nodes = indexer.graph.find_nodes_by_name("JWTValidator")
 for n in nodes:
     print(n.id, n.kind, n.file_path)
 
-# Neighbors and shortest path
-neighbors = indexer.graph.neighbors("file:src/auth/jwt.py", direction="out")
-path = indexer.graph.shortest_path("file:src/auth/jwt.py", "file:src/api/users.py")
+# Outgoing / incoming edges
+edges = indexer.graph.get_neighbors("class:JWTValidator")
 
-# Most-connected architectural hubs
-hubs = indexer.graph.pick_seeds(top_k=10)
+# Shortest path between two nodes (matched by label)
+path = indexer.get_shortest_path("file:src/auth/jwt.py", "file:src/api/users.py")
 ```
 
 For agent-style retrieval, use `resolve` to get a fully assembled `ContextPack`:
 
 ```python
 pack = indexer.resolve("how are JWT tokens validated?", top_k=5)
-# pack.primary       — top-scoring chunks
-# pack.tests         — test files for the primary results
-# pack.imports       — modules imported by primary results
-# pack.importers     — modules that import the primary results
-# pack.callers       — callers of the primary symbols
-# pack.callees       — callees of the primary symbols
-# pack.related       — sibling symbols/files
-# pack.context       — formatted, token-budgeted text ready for an LLM prompt
+print(indexer.format_context(pack))
 ```
 
-The MCP `resolve` tool returns the same `ContextPack` as JSON, and the MCP `search` tool can attach per-file `graph_context` to each result via `hybrid=true`.
+The MCP `resolve` tool returns the same `ContextPack` as JSON, and the MCP
+`search` tool can attach per-file `graph_context` to each result via
+`hybrid=true`.
 
-### Watch Mode
+### Watch mode
 
 ```python
 from vortexa.interfaces.watcher import IndexWatcher
@@ -306,14 +330,17 @@ watcher.start()   # Background thread; auto-re-indexes when files change
 watcher.stop()
 ```
 
-The watcher prefers `watchfiles` (native inotify/FSEvents/ReadDirectoryChangesW) and falls back to `(mtime_ns, size)` polling if it is unavailable. Set `force_polling=True` to always use polling, or set `VORTEXA_FORCE_POLLING=1` in the environment.
+The watcher prefers `watchfiles` (native `inotify`/`FSEvents`/`ReadDirectoryChangesW`)
+and falls back to `(mtime_ns, size)` polling if unavailable. Set `force_polling=True`
+to always poll, or set `VORTEXA_FORCE_POLLING=1` in the environment.
 
 ### Management
 
 ```python
 # Index statistics (includes graph + session info)
 stats = indexer.stats()
-# → {indexed_files, total_chunks, languages, memo_hits, memo_misses, graph nodes/edges, ...}
+# → {indexed_files, total_chunks, languages, graph_nodes, graph_edges,
+#    memo_hits, memo_misses, session_queries}
 
 # Reset
 indexer.clear()   # Delete the persistent index + graph + session
@@ -323,58 +350,69 @@ indexer.clear()   # Delete the persistent index + graph + session
 
 <div align="center">
 
-## CLI Search
+## CLI
 
 </div>
 
-The installed `vortexa` command can also search a codebase directly:
+The `vortexa` command exposes subcommands and a backward-compatible `-q` alias:
 
 ```bash
-# Search the current working directory
-vortexa -q "authentication middleware that validates JWT tokens"
+# Search (with Vortex Score reranking) — JSON by default, --plain for text
+vortexa search "authentication middleware that validates JWT tokens" --top-k 5 --plain
 
-# Search a specific codebase root
-vortexa -q "CSV parser implementation" /path/to/project
+# Full context resolution with graph expansion
+vortexa resolve "CSV parser implementation" --top-k 5
 
-# Pass Kilo-style environment details; `Working directory` is used as the root
-vortexa -q "error handling" "Working directory: /path/to/project
-Workspace root folder: /"
-```
+# Deep-dive into a file path, file:line, or symbol name
+vortexa explain "src/auth/jwt.py:42"
 
-Useful flags:
-
-| Flag | Description |
-|------|-------------|
-| `-q`, `--query` | Search query. Quote multi-word queries. |
-| `--root` | Codebase root to index and search. Overrides `environment_details`. |
-| `--top-k` | Maximum number of results to return. Default: `10`. |
-| `--alpha` | Semantic weight from `0.0` to `1.0`; defaults to adaptive weighting. |
-| `--include-text` | Include text files such as `.md`, `.json`, and `.yaml` in the index. |
-| `--force` | Force a full re-index before searching. |
-| `--no-index` | Search the existing index only. |
-| `--plain` | Print human-readable results instead of JSON. |
-
-By default CLI output is JSON:
-
-```json
-[
-  {
-    "file": "src/auth/middleware.py",
-    "lines": "12-48",
-    "score": 0.892,
-    "source": "hybrid",
-    "content": "def validate_jwt(token: str) -> User: ..."
-  }
-]
-```
-
-The `vortexa` command still starts the MCP server when no query is provided. You can also start the server explicitly:
-
-```bash
+# Start the MCP server (also the default when no arguments are given)
 vortexa serve
-# or
-vortexa-serve
+# or: vortexa-serve
+
+# Legacy alias (search without full Vortex Score rerank)
+vortexa -q "authentication middleware that validates JWT tokens"
 ```
+
+| Subcommand | Description |
+|------------|-------------|
+| `serve` | Start the MCP server on stdio (default with no args). |
+| `search QUERY` | Hybrid semantic+BM25 search with Vortex Score reranking. |
+| `resolve QUERY` | Full context resolution with knowledge-graph expansion. |
+| `explain LOCATION` | Deep-dive into a file path, `file:line`, or symbol name. |
+| `-q QUERY` | Legacy search shortcut (backward compatible). |
+
+Common flags (all subcommands): `--root`, `--top-k`, `--alpha`, `--include-text`,
+`--force`, `--no-index`, `--plain`. `search` additionally accepts `--hybrid`.
+See [docs/cli.md](docs/cli.md) for the full reference.
+
+---
+
+<div align="center">
+
+## For Agents
+
+</div>
+
+Paste the block below into an agent system prompt so it uses vortexa instead of
+`grep`/`rg`/manual file reads. `resolve` is the recommended default: it returns
+the match plus its tests, importers, callers, callees, and dependency chain in
+one call.
+
+```text
+## Codebase Search
+
+Use vortexa (not grep/rg/file reads) to search code or understand a repo. It
+indexes the current directory (or pass --root <dir>).
+
+  vortexa resolve "<query>" --plain          # default: matches + tests + callers/callees + deps
+  vortexa search "<query>" --hybrid --plain  # ranked hits + per-file graph context
+  vortexa explain "<file>:<line>|<symbol>"   # deep dive into a known location
+
+Install: pip install vortexa  (add [full] for tree-sitter AST chunking).
+```
+
+For native MCP tool integration (Claude Code / Cursor), see [MCP Server](#mcp-server).
 
 ---
 
@@ -384,7 +422,8 @@ vortexa-serve
 
 </div>
 
-vortexa ships with a built-in **MCP (Model Context Protocol) server** that exposes the entire V2 context engine as a set of agent-friendly tools. Start it with:
+vortexa ships with a built-in **MCP (Model Context Protocol) server** that exposes
+the entire V2 context engine as agent-friendly tools. Start it with:
 
 ```bash
 # Auto-indexes current directory, serves on stdio
@@ -395,10 +434,11 @@ vortexa serve
 ```
 
 On startup it indexes the current working directory and prints stats to stderr:
-```
+
+```text
 [vortexa] Indexing /path/to/project ...
 [vortexa] Ready: 127 files, 843 chunks, 2104 graph nodes in 1820ms
-[vortexa] Auto-reindex watcher started (backend=native)
+[vortexa] Auto-reindex watcher started (polling every 3s)
 ```
 
 ### Tools
@@ -417,8 +457,8 @@ The server exposes **11 tools** across three groups.
 
 | Tool | Description | Key arguments |
 |------|-------------|---------------|
-| `query_graph` | BFS or DFS traversal from query-relevant seeds. | `query` (str), `mode` (`"bfs"` or `"dfs"`), `max_hops` (int) |
-| `get_god_nodes` | Most-connected real entities (architectural hubs). | `top_k` (int, default 10) |
+| `query_graph` | BFS or DFS traversal from query-relevant seeds. | `question` (str), `mode` (`"bfs"` or `"dfs"`), `depth` (int) |
+| `get_god_nodes` | Most-connected real entities (architectural hubs). | `top_n` (int, default 10) |
 | `get_graph_node` | Detailed info for one node (label, kind, degree, source file). | `label` (str) |
 | `get_graph_neighbors` | Incoming and outgoing edges of a node. | `label` (str) |
 | `get_shortest_path` | BFS shortest path between two symbols/files. | `source` (str), `target` (str), `max_hops` (int, default 8) |
@@ -433,7 +473,8 @@ The server exposes **11 tools** across three groups.
 
 ### Usage with Claude Code / Cursor
 
-Add to your MCP configuration file (`~/.cursor/mcp.json` or Claude Code's `mcp_servers` config):
+Add to your MCP configuration file (`~/.cursor/mcp.json` or Claude Code's
+`mcp_servers` config):
 
 ```json
 {
@@ -447,7 +488,13 @@ Add to your MCP configuration file (`~/.cursor/mcp.json` or Claude Code's `mcp_s
 }
 ```
 
-The agent now has access to the full V2 context engine — `search`, `resolve`, and `explain` for retrieval; `query_graph`, `get_god_nodes`, `get_graph_node`, `get_graph_neighbors`, and `get_shortest_path` for navigation; and `stats`, `watch`, `clear_index` for lifecycle. This is significantly more effective than `grep` or `rg` for exploratory queries, because each `search` call can return primary results, related tests, importers, callers, and callees in a single round-trip.
+The agent now has access to the full V2 context engine — `search`, `resolve`,
+and `explain` for retrieval; `query_graph`, `get_god_nodes`, `get_graph_node`,
+`get_graph_neighbors`, and `get_shortest_path` for navigation; and `stats`,
+`watch`, `clear_index` for lifecycle. This is significantly more effective than
+`grep` or `rg` for exploratory queries, because each `search` call can return
+primary results, related tests, importers, callers, and callees in a single
+round-trip.
 
 ---
 
@@ -457,40 +504,104 @@ The agent now has access to the full V2 context engine — `search`, `resolve`, 
 
 </div>
 
-### Directory Layout
+vortexa is organized into four layers: `core` (orchestration + graph + parsing +
+embedding), `storage` (LMDB vector store, BM25, session memory, file walker),
+`search` (hybrid retrieval, ranking, scoring, context expansion), and
+`interfaces` (CLI, MCP server, watcher).
 
-```
-vortexa/
-├── core/
-│   ├── indexer.py       # CodebaseIndexer — main orchestrator
-│   ├── chunking.py      # AST-aware (tree-sitter) + line-based chunking
-│   ├── parser.py        # Multi-language tree-sitter symbol/import extraction
-│   ├── embedding.py     # Embedding models (Model2Vec, SentenceTransformers)
-│   ├── lf4_model.py     # Vortex-Embed 4-bit LF4 model (default embedder)
-│   ├── language.py      # Language detection & file extension mapping
-│   ├── graph.py         # KnowledgeGraph — nodes, edges, traversal, scoring
-│   └── types.py         # Shared types (Chunk, ChunkConfig, IndexStats, GraphNode, ...)
-├── storage/
-│   ├── vector_store.py  # LMDB-backed persistent vector store
-│   ├── bm25.py          # BM25 keyword index with persistent storage
-│   ├── session_memory.py # Per-session agent query / symbol visit tracking
-│   └── walker.py        # File system walker with .gitignore support
-├── search/
-│   ├── search.py        # Hybrid search orchestrator (dense + sparse)
-│   ├── ranking.py       # Result ranking & symbol query detection
-│   ├── path_scorer.py   # Filename / path signal scorer
-│   ├── vortex_score.py  # Weighted fusion of all ranking signals
-│   ├── structural.py    # Import-graph, call-graph, reference-density boosts
-│   ├── context_expansion.py  # Pull tests, importers, callers, callees into a ContextPack
-│   ├── context_compressor.py # Token-budgeted formatting of a ContextPack
-│   └── tokens.py        # Identifier tokenization (camelCase, snake_case)
-└── interfaces/
-    ├── cli.py           # Command-line search entrypoint
-    ├── mcp_server.py    # MCP server with 11 agent tools (stdio transport)
-    └── watcher.py       # Live file watcher (watchfiles native + polling fallback)
+```mermaid
+graph TD
+    subgraph "Public API"
+        Indexer["core.indexer<br/>CodebaseIndexer"]
+        Search["search.search<br/>search_hybrid()"]
+        VortexScore["search.vortex_score<br/>compute_vortex_score()"]
+    end
+
+    subgraph "Core"
+        Chunking["core.chunking<br/>chunk_source()"]
+        Parser["core.parser<br/>parse_symbols()"]
+        Embedding["core.embedding<br/>Embedder"]
+        LF4["core.lf4_model<br/>VortexEmbedV3"]
+        Language["core.language<br/>detect_language()"]
+        Graph["core.graph<br/>KnowledgeGraph"]
+        Types["core.types<br/>Chunk, SymbolInfo, ..."]
+    end
+
+    subgraph "Storage"
+        VectorStore["storage.vector_store<br/>LMDB Vector Store"]
+        BM25["storage.bm25<br/>BM25 Index"]
+        Session["storage.session_memory<br/>SessionMemory"]
+        Walker["storage.walker<br/>walk_files()"]
+    end
+
+    subgraph "Search"
+        PathScorer["search.path_scorer<br/>path_score()"]
+        Structural["search.structural<br/>import + call + density"]
+        ContextExpansion["search.context_expansion<br/>build_context_pack()"]
+        ContextCompressor["search.context_compressor<br/>format_for_agent()"]
+        Ranking["search.ranking<br/>ranking + symbol detection"]
+    end
+
+    subgraph "Interfaces"
+        CLI["interfaces.cli<br/>Command-line"]
+        MCP["interfaces.mcp_server<br/>FastMCP server (11 tools)"]
+        Watcher["interfaces.watcher<br/>IndexWatcher"]
+    end
+
+    Indexer --> Chunking
+    Indexer --> Parser
+    Indexer --> Embedding
+    Indexer --> Language
+    Indexer --> Graph
+    Indexer --> VectorStore
+    Indexer --> BM25
+    Indexer --> Session
+    Indexer --> Search
+    Indexer --> Walker
+
+    Search --> VortexScore
+    Search --> PathScorer
+    Search --> Structural
+    Search --> Ranking
+    Search --> Types
+
+    VortexScore --> Graph
+    VortexScore --> Ranking
+
+    ContextExpansion --> Graph
+    ContextExpansion --> Search
+    ContextCompressor --> ContextExpansion
+
+    CLI --> Indexer
+    MCP --> Indexer
+    MCP --> ContextExpansion
+    MCP --> ContextCompressor
+    MCP --> Watcher
+    Watcher --> Walker
 ```
 
-### Data Flow
+### Indexing pipeline
+
+```mermaid
+graph LR
+    A[Source Files] --> B[File Walker<br/>.gitignore aware]
+    B --> C[Tree-sitter Parser<br/>35+ languages]
+    C --> D[Knowledge Graph<br/>files · classes · functions · symbols]
+    C --> E[Chunk Set]
+    D --> F[Symbol Vector Index]
+    E --> G[File Vector Index]
+    E --> H[Function Vector Index]
+    E --> I[BM25 Tokenizer]
+    F --> J[(LMDB)]
+    G --> J
+    H --> J
+    I --> K[(BM25 Index)]
+    J --> L[Content Hash Memo]
+    K --> L
+    L --> M[Skip unchanged files]
+```
+
+### Data flow
 
 ```mermaid
 sequenceDiagram
@@ -537,99 +648,8 @@ sequenceDiagram
     Indexer-->>User: agent-ready text
 ```
 
-### Indexing Pipeline
-
-```mermaid
-graph LR
-    A[Source Files] --> B[File Walker<br/>.gitignore aware]
-    B --> C[Tree-sitter Parser<br/>35+ languages]
-    C --> D[Knowledge Graph<br/>files · classes · functions · symbols]
-    C --> E[Chunk Set]
-    D --> F[Symbol Vector Index]
-    E --> G[File Vector Index]
-    E --> H[Function Vector Index]
-    E --> I[BM25 Tokenizer]
-    F --> J[(LMDB)]
-    G --> J
-    H --> J
-    I --> K[(BM25 Index)]
-    J --> L[Content Hash Memo]
-    K --> L
-    L --> M[Skip unchanged files]
-```
-
-### Module Dependencies
-
-```mermaid
-graph TD
-    subgraph "Public API"
-        Indexer["core.indexer<br/>CodebaseIndexer"]
-        Search["search.search<br/>search_hybrid()"]
-        VortexScore["search.vortex_score<br/>compute_vortex_score()"]
-    end
-
-    subgraph "Core"
-        Chunking["core.chunking<br/>chunk_source()"]
-        Parser["core.parser<br/>parse_symbols()"]
-        Embedding["core.embedding<br/>Embedder"]
-        LF4["core.lf4_model<br/>VortexEmbedV3"]
-        Language["core.language<br/>detect_language()"]
-        Graph["core.graph<br/>KnowledgeGraph"]
-        Types["core.types<br/>Chunk, SymbolInfo, ..."]
-    end
-
-    subgraph "Storage"
-        VectorStore["storage.vector_store<br/>LMDB Vector Store"]
-        BM25["storage.bm25<br/>BM25 Index"]
-        Session["storage.session_memory<br/>SessionMemory"]
-        Walker["storage.walker<br/>walk_files()"]
-    end
-
-    subgraph "Search"
-        PathScorer["search.path_scorer<br/>path_score()"]
-        Structural["search.structural<br/>import + call + density"]
-        ContextExpansion["search.context_expansion<br/>build_context_pack()"]
-        ContextCompressor["search.context_compressor<br/>format_for_agent()"]
-        Ranking["search.ranking<br/>ranking + symbol detection"]
-    end
-
-    subgraph "Interfaces"
-        CLI["interfaces.cli<br/>Command-line search"]
-        MCP["interfaces.mcp_server<br/>FastMCP server (11 tools)"]
-        Watcher["interfaces.watcher<br/>IndexWatcher"]
-    end
-
-    Indexer --> Chunking
-    Indexer --> Parser
-    Indexer --> Embedding
-    Indexer --> Language
-    Indexer --> Graph
-    Indexer --> VectorStore
-    Indexer --> BM25
-    Indexer --> Session
-    Indexer --> Search
-    Indexer --> Walker
-
-    Search --> VortexScore
-    Search --> PathScorer
-    Search --> Structural
-    Search --> Ranking
-    Search --> Types
-
-    VortexScore --> Graph
-    VortexScore --> Ranking
-
-    ContextExpansion --> Graph
-    ContextExpansion --> Search
-    ContextCompressor --> ContextExpansion
-
-    CLI --> Indexer
-    MCP --> Indexer
-    MCP --> ContextExpansion
-    MCP --> ContextCompressor
-    MCP --> Watcher
-    Watcher --> Walker
-```
+For a deep dive into each module, the graph model, persistence, and the indexing
+pipeline, see [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -639,26 +659,25 @@ graph TD
 
 </div>
 
-| Package | Required | Used For |
+| Package | Required | Used for |
 |---------|----------|----------|
 | `numpy` | Yes | Vector operations, embedding inference |
-| `lmdb` | Yes | Persistent vector and chunk metadata storage |
+| `lmdb` | Yes | Persistent vector store, BM25 state, and knowledge graph |
 | `bm25s` | Yes | Fast BM25 keyword index and persistence |
-| `pathspec` | Yes | `.gitignore` pattern matching in file walker |
-| `huggingface-hub` | Yes (default model) | Loading `VTXAI/Vortex-Embed-4.7M` |
-| `tokenizers` | Yes (default model) | HF tokenizer for the LF4 embedding model |
-| `safetensors` | Yes (default model) | Safe tensor loading for 4-bit weights |
-| `model2vec` | Optional | Alternative static embeddings |
-| `sentence-transformers` | Optional | Transformer-based dense embeddings |
-| `tree-sitter-language-pack` | Optional | AST-aware chunking + multi-language symbol extraction |
+| `pathspec` | Yes | `.gitignore` pattern matching in the file walker |
+| `huggingface-hub` | Yes | Loading `VTXAI/Vortex-Embed-4.7M` |
+| `tokenizers` | Yes | HF tokenizer for the LF4 embedding model |
+| `safetensors` | Yes | Safe tensor loading for 4-bit weights |
+| `fastmcp` | Yes | MCP server for LLM tool integration |
+| `model2vec` | Optional | Alternative static embeddings (`[full]`) |
+| `sentence-transformers` | Optional | Transformer-based dense embeddings (`[full]`) |
+| `tree-sitter-language-pack` | Optional | AST-aware chunking + multi-language symbol extraction (`[full]`) |
 | `watchfiles` | Optional | Native FS-event watcher backend |
-| `fastmcp` | Optional | MCP server for LLM tool integration |
 
 Install optional groups:
 
 ```bash
-pip install "vortexa[full]"      # model2vec + sentence-transformers + tree-sitter + watchfiles
-pip install "vortexa[full, mcp]" # everything including MCP server
+pip install "vortexa[full]"        # model2vec + sentence-transformers + tree-sitter
 ```
 
 ---
@@ -668,6 +687,8 @@ pip install "vortexa[full, mcp]" # everything including MCP server
 ## License
 
 </div>
+
+Released under the [Apache License 2.0](LICENSE).
 
 ```
 Copyright 2025 VortexAI
