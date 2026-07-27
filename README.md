@@ -275,6 +275,7 @@ Useful flags:
 | `--force` | Force a full re-index before searching. |
 | `--no-index` | Search the existing index only. |
 | `--plain` | Print human-readable results instead of JSON. |
+| `--model` | Embedding model ID or alias (`mini`, `nano`). Default: `mini`. |
 
 By default CLI output is JSON:
 
@@ -297,6 +298,52 @@ vortexa serve
 # or
 vortexa-serve
 ```
+
+---
+
+## Model Configuration
+
+vortexa supports configurable embedding models. The default is `mini` (`VTXAI/vtx-embed-7M`).
+
+### Available Models
+
+| Alias | Model ID | Description |
+|-------|----------|-------------|
+| `mini` | `VTXAI/vtx-embed-7M` | Default. 7M-parameter Vortex-Embed v4.5 with LF4 4-bit dequant, SIF+PC, Matryoshka. |
+| `nano` | `VTXAI/vtx-embed-1M` | Lightweight 1M-parameter variant. Lower RAM, lower dim. |
+
+### CLI Usage
+
+```bash
+# Use the nano model (smaller, faster)
+vortexa -q "authentication" --model nano /path/to/project
+
+# Use mini explicitly (same as default)
+vortexa -q "authentication" --model mini /path/to/project
+
+# Use a custom HuggingFace model ID
+vortexa -q "authentication" --model VTXAI/vtx-embed-1M /path/to/project
+```
+
+### Python API
+
+```python
+from vortexa.core.indexer import CodebaseIndexer
+
+# Use nano model
+indexer = CodebaseIndexer(root="/path/to/project", model_id="VTXAI/vtx-embed-1M")
+
+# Use mini model (default)
+indexer = CodebaseIndexer(root="/path/to/project", model_id="VTXAI/vtx-embed-7M")
+```
+
+### Alternative Embedders
+
+The `embedding.py` module also provides alternative embedders that can be passed directly:
+
+- `Model2VecEmbedder` — static embeddings via Model2Vec (`AI4free/JARVIS-tool-search-v1`)
+- `SentenceTransformerEmbedder` — Transformer-based dense embeddings (`all-MiniLM-L6-v2`)
+- `LF4Embedder` — 4-bit quantized static embeddings (`VTXAI/Vortex-Embed-4.7M`)
 
 ---
 
@@ -495,7 +542,7 @@ graph TD
 | `bm25s` | Yes | Fast BM25 keyword index and persistence |
 | `pathspec` | Yes | `.gitignore` pattern matching in file walker |
 | `model2vec` | Optional | Alternative static embeddings |
-| `huggingface-hub` | Yes (default model) | Loading `VTXAI/vtx-embed-7M` |
+| `huggingface-hub` | Yes (default model) | Loading `VTXAI/vtx-embed-7M` (mini) or `VTXAI/vtx-embed-1M` (nano) |
 | `tokenizers` | Yes (default model) | HF tokenizer for embedding model |
 | `safetensors` | Yes (default model) | Safe tensor loading for 4-bit weights |
 | `sentence-transformers` | Optional | Transformer-based dense embeddings |

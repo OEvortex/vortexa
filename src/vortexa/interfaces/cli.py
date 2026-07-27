@@ -150,6 +150,12 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="print human-readable results instead of JSON",
     )
+    parser.add_argument(
+        "--model",
+        metavar="ID",
+        default=None,
+        help="embedding model ID (default: VTXAI/vtx-embed-7M, alias: mini, nano)",
+    )
     return parser
 
 
@@ -171,7 +177,20 @@ def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         root = _resolve_root(args.environment_details, args.root)
     except ValueError as exc:
         parser.error(str(exc))
-    indexer = CodebaseIndexer(root=root)
+    _MODEL_ALIASES = {
+        "mini": "VTXAI/vtx-embed-7M",
+        "nano": "VTXAI/vtx-embed-1M",
+    }
+
+    def _resolve_model_id(model_arg: str | None) -> str | None:
+        if model_arg is None:
+            return None
+        if model_arg in _MODEL_ALIASES:
+            return _MODEL_ALIASES[model_arg]
+        return model_arg
+
+    model_id = _resolve_model_id(args.model)
+    indexer = CodebaseIndexer(root=root, model_id=model_id)
 
     has_index = _has_existing_index(root)
 

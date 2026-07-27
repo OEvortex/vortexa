@@ -30,6 +30,8 @@ class VortexEmbedderV4:
     """
 
     DEFAULT_MODEL_ID = "VTXAI/vtx-embed-7M"
+    MINI_MODEL_ID = "VTXAI/vtx-embed-7M"
+    NANO_MODEL_ID = "VTXAI/vtx-embed-1M"
 
     def __init__(
         self,
