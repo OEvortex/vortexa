@@ -42,7 +42,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
 
 vortexa is a standalone **codebase indexing and semantic search engine** designed for AI agents and developers. It builds a persistent, hybrid search index over source code using:
 
-- **Dense retrieval** via static or learned embeddings (Model2Vec / SentenceTransformers)
+- **Dense retrieval** via VortexEmbedderV4 (on-the-fly LF4 4-bit dequant, SIF+PC, Matryoshka) or static embeddings (Model2Vec / SentenceTransformers)
 - **Sparse retrieval** via BM25 keyword scoring
 - **AST-aware chunking** that respects function and class boundaries via tree-sitter
 - **LMDB-backed storage** for fast, persistent vector and chunk storage
@@ -362,7 +362,7 @@ vortexa/
 ├── core/
 │   ├── indexer.py       # CodebaseIndexer — main orchestrator
 │   ├── chunking.py      # AST-aware (tree-sitter) + line-based chunking
-│   ├── embedding.py     # Embedding models (Model2Vec, SentenceTransformers)
+│   ├── embedding.py     # Embedding model wrappers (Model2Vec, SentenceTransformers, LF4)
 │   ├── language.py      # Language detection & file extension mapping
 │   └── types.py         # Shared types (Chunk, ChunkConfig, IndexStats, SearchResult, ...)
 ├── storage/
@@ -423,7 +423,7 @@ graph LR
     D -->|No| F[Line-based Splitter<br/>Configurable size/overlap]
     E --> G[Chunk Set]
     F --> G
-    G --> H[Embedding Model<br/>Model2Vec / SentenceTransformer]
+    G --> H[Embedding Model<br/>VortexEmbedderV4 (LF4) / Model2Vec / SentenceTransformer]
     G --> I[BM25 Tokenizer]
     H --> J[(LMDB Vector Store)]
     I --> K[(BM25 Index)]
@@ -495,7 +495,7 @@ graph TD
 | `bm25s` | Yes | Fast BM25 keyword index and persistence |
 | `pathspec` | Yes | `.gitignore` pattern matching in file walker |
 | `model2vec` | Optional | Alternative static embeddings |
-| `huggingface-hub` | Yes (default model) | Loading `VTXAI/Vortex-Embed-4.7M` |
+| `huggingface-hub` | Yes (default model) | Loading `VTXAI/vtx-embed-7M` |
 | `tokenizers` | Yes (default model) | HF tokenizer for embedding model |
 | `safetensors` | Yes (default model) | Safe tensor loading for 4-bit weights |
 | `sentence-transformers` | Optional | Transformer-based dense embeddings |

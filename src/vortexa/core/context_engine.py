@@ -1,7 +1,7 @@
 """VortexA v2 — integrated context engine.
 
 Combines:
-  - VortexEmbedderV3 (4-bit dense retrieval, SIF+PC)
+  - VortexEmbedderV4 (4-bit dense retrieval, SIF+PC, on-the-fly LF4 dequant)
   - RepoGraph (knowledge graph)
   - VortexScore (multi-signal ranking)
   - Context expansion (related files/tests)
@@ -26,7 +26,7 @@ from vortexa.core.chunking import chunk_source
 from vortexa.core.embedding import Embedder
 from vortexa.core.graph import RepoGraph, RepoGraphBuilder
 from vortexa.core.language import detect_language, get_extensions
-from vortexa.core.v3_embedder import VortexEmbedderV3
+from vortexa.core.v4_embedder import VortexEmbedderV4
 from vortexa.core.vortex_score import VortexScoreWeights, vortex_score, tokenize
 
 logger = logging.getLogger(__name__)
@@ -65,7 +65,7 @@ class VortexContextEngine:
         5. Return ContextPack
 
     Args:
-        embedder: VortexEmbedderV3 (or compatible Embedder)
+        embedder: VortexEmbedderV4 (or compatible Embedder)
         chunks: List[dict] with 'path', 'content', 'start', 'end', 'chunk_id'
         chunk_embeddings: np.ndarray (N, dim)
         graph: Optional RepoGraph
