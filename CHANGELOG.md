@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1] - Unreleased
+
+### Added
+- `VortexEmbedInference.similarity()` instance method for computing cosine similarity between
+  queries and documents (accepts strings, lists, or pre-encoded arrays)
+
 ## [0.3.0] - Unreleased
 
 ### Changed

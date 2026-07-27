@@ -28,8 +28,12 @@ Convenience function (stateless):
     from vortexa.core.inference import embed
 
     vec = embed("India is a diverse country", model="nano", dim=64)
-"""
-from __future__ import annotations
+
+Similarity:
+    from vortexa.core.inference import similarity
+
+    sim = similarity(embeddings1, embeddings2)   # cosine similarity matrix
+"""; from __future__ import annotations
 
 from typing import List, Union
 
@@ -44,6 +48,36 @@ _MODEL_ALIASES = {
 
 def _resolve_model_id(model: str) -> str:
     return _MODEL_ALIASES.get(model, model)
+
+
+def similarity(
+    embeddings1: npt.NDArray[np.float32],
+    embeddings2: npt.NDArray[np.float32],
+) -> npt.NDArray[np.float32]:
+    """Compute cosine similarity between two sets of embeddings.
+
+    Since Vortex-Embed outputs are L2-normalized by default,
+    cosine similarity is equivalent to the dot product.
+
+    Args:
+        embeddings1: Array of shape ``(N, D)``.
+        embeddings2: Array of shape ``(M, D)``.
+
+    Returns:
+        A numpy array of shape ``(N, M)`` where each entry
+        ``[i, j]`` is the cosine similarity between
+        ``embeddings1[i]`` and ``embeddings2[j]``.
+
+    Example:
+        >>> from vortexa.core.inference import VortexEmbedInference
+        >>> model = VortexEmbedInference("mini")
+        >>> qvecs = model.encode(["India is diverse", "Chennai is a city"])
+        >>> dvecs = model.encode(["India has 28 states", "Mumbai is the capital of Maharashtra"])
+        >>> scores = similarity(qvecs, dvecs)
+        >>> scores.shape
+        (2, 2)
+    """
+    return embeddings1 @ embeddings2.T
 
 
 class VortexEmbedInference:
@@ -62,10 +96,10 @@ class VortexEmbedInference:
     Example:
         >>> from vortexa.core.inference import VortexEmbedInference
         >>> model = VortexEmbedInference("mini")
-        >>> vec = model.encode("hello world")
+        >>> vec = model.encode("India is a diverse country")
         >>> vec.shape
         (1, 256)
-        >>> vec = model.encode("hello world", dim=128)
+        >>> vec = model.encode("India has 28 states", dim=128)
         >>> vec.shape
         (1, 128)
         >>> model.dim
@@ -128,6 +162,38 @@ class VortexEmbedInference:
             normalize=normalize,
             truncate_dim=effective_dim,
         )
+
+    def similarity(
+        self,
+        a: Union[str, List[str], npt.NDArray[np.float32]],
+        b: Union[str, List[str], npt.NDArray[np.float32]],
+        *,
+        dim: int | None = None,
+    ) -> npt.NDArray[np.float32]:
+        """Compute cosine similarity between two sets of queries/documents.
+
+        Accepts raw strings, lists of strings, or pre-encoded arrays.
+        Strings are encoded first using the model's ``encode()`` method.
+
+        Args:
+            a: Query(s) — string, list of strings, or ``(N, D)`` array.
+            b: Document(s) — string, list of strings, or ``(M, D)`` array.
+            dim: If encoding strings, truncate to this dimension.
+
+        Returns:
+            An ``(N, M)`` similarity matrix where ``[i, j]`` is the
+            cosine similarity between ``a[i]`` and ``b[j]``.
+
+        Example:
+            >>> model = VortexEmbedInference(\"mini\")
+            >>> model.similarity(\"India is diverse\", [\"India has states\"])
+            array([[0.85...]])
+        """
+        if not isinstance(a, np.ndarray):
+            a = self.encode(a, dim=dim)
+        if not isinstance(b, np.ndarray):
+            b = self.encode(b, dim=dim)
+        return a @ b.T
 
 
 def embed(

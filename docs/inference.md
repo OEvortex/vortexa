@@ -167,6 +167,60 @@ vec_64 = model.encode("Chennai is in Tamil Nadu", dim=64)      # uses 64
 
 ---
 
+## `similarity()` — Cosine Similarity
+
+Compute the cosine similarity matrix between two sets of embeddings.
+
+Since `VortexEmbedInference.encode()` and `embed()` normalize outputs by default,
+cosine similarity reduces to a simple dot product.
+
+### Standalone function
+
+```python
+from vortexa.core.inference import VortexEmbedInference, similarity
+
+model = VortexEmbedInference("mini")
+
+# Encode queries and documents
+qvecs = model.encode(["India is diverse", "Chennai is a city"])
+dvecs = model.encode(["India has 28 states", "Mumbai is the financial capital"])
+
+# Cosine similarity matrix — shape (N, M)
+scores = similarity(qvecs, dvecs)
+print(scores.shape)  # (2, 2)
+```
+
+### Instance method
+
+The model also provides a convenience method that accepts raw strings, lists,
+or pre-encoded arrays:
+
+```python
+# Strings are encoded automatically
+scores = model.similarity("India is diverse", ["India has 28 states", "Mumbai is financial"])
+print(scores.shape)  # (1, 2)
+
+# Or pass pre-encoded arrays
+scores = model.similarity(qvecs, dvecs)
+```
+
+The returned matrix ``scores[i, j]`` is the cosine similarity between
+``qvecs[i]`` and ``dvecs[j]``. Values range from ``-1`` (opposite) to ``1`` (identical).
+
+### CLI
+
+The `vortexa embed` command outputs embeddings as JSON. You can compute similarity
+in your own pipeline:
+
+```bash
+# Get embeddings, then compute similarity externally
+qvec=$(vortexa embed "India is diverse" --model nano --json | jq '.embeddings[0]')
+dvec=$(vortexa embed "Chennai is a major city" --model nano --json | jq '.embeddings[0]')
+# Compute dot product with your preferred tool
+```
+
+---
+
 ## Comparison: Class API vs Stateless Function
 
 | Aspect | `VortexEmbedInference` | `embed()` |
