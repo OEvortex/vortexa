@@ -13,6 +13,8 @@
 - New `VortexEmbedderV4` thread-safe embedder wrapper (`src/vortexa/core/v4_embedder.py`)
 - New `VortexEmbedV4_5` model class with LF4 dequantization (`src/vortexa/core/lf4_v4_model.py`)
 - `VortexEmbedderV4` auto-creates `VortexEmbedV4_5` when `model_id` is `VTXAI/vtx-embed-7M`
+- Model aliases `mini` (`VTXAI/vtx-embed-7M`) and `nano` (`VTXAI/vtx-embed-1M`) for easy CLI use
+- `--model` CLI flag to select embedding model (`mini`, `nano`, or any HuggingFace model ID)
 - Alternative embedder models still available: `Model2VecEmbedder`, `SentenceTransformerEmbedder`, `LF4Embedder`
 
 ### Removed
