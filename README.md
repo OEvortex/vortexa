@@ -347,13 +347,52 @@ The `embedding.py` module also provides alternative embedders that can be passed
 
 ---
 
+## Inference API
+
+vortexa can be used as a standalone embedding inference engine for VTXAI models,
+similar to how sentence-transformers works but purpose-built for Vortex-Embed models.
+
+### Python API
+
+```python
+from vortexa.core.inference import embed
+
+# Encode a single string (default: mini model)
+vec = embed("hello world")
+
+# Encode multiple strings with the nano model
+vecs = embed(["hello", "world"], model="nano")
+
+# Use any HuggingFace model ID
+vecs = embed(["query text"], model="VTXAI/vtx-embed-7M")
+
+# Shape: (1, D) for single text, (N, D) for batch
+print(vec.shape)
+```
+
+### CLI
+
+```bash
+# Encode text with the mini model (default)
+vortexa embed "hello world"
+
+# Encode with the nano model
+vortexa embed "hello world" --model nano
+
+# Encode multiple strings
+vortexa embed "hello world" "goodbye world" --model nano
+
+# Use a custom model ID
+vortexa embed "search query" --model VTXAI/vtx-embed-7M
+```
+
+---
+
 <div align="center">
 
 ## MCP Server
 
 </div>
-
-vortexa ships with a built-in **MCP (Model Context Protocol) server** that exposes codebase search as a single `search` tool. Start it with:
 
 ```bash
 # Auto-indexes current directory, serves on stdio

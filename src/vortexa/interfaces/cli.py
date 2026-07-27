@@ -255,9 +255,60 @@ def main(argv: list[str] | None = None) -> int:
         run_server()
         return 0
 
+    if raw_argv[0] == "embed":
+        return _run_embed(raw_argv[1:])
+
     parser = _build_parser()
     args = parser.parse_args(raw_argv)
     return run_query(args, parser)
+
+
+def _build_embed_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="vortexa embed",
+        description="Encode text strings into dense vector embeddings using VTX-embed models.",
+    )
+    parser.add_argument(
+        "texts",
+        nargs="*",
+        help="text strings to encode (quote multi-word strings)",
+    )
+    parser.add_argument(
+        "--model",
+        metavar="ID",
+        default="mini",
+        help="embedding model ID or alias (mini, nano). Default: mini",
+    )
+    return parser
+
+
+def _run_embed(argv: list[str]) -> int:
+    parser = _build_embed_parser()
+    args = parser.parse_args(argv)
+
+    if not args.texts:
+        raise SystemExit("at least one text string is required for embedding")
+
+    _MODEL_ALIASES = {
+        "mini": "VTXAI/vtx-embed-7M",
+        "nano": "VTXAI/vtx-embed-1M",
+    }
+
+    def _resolve_model_id(model_arg: str) -> str:
+        return _MODEL_ALIASES.get(model_arg, model_arg)
+
+    model_id = _resolve_model_id(args.model)
+    from vortexa.core.inference import embed
+
+    vecs = embed(args.texts, model=model_id)
+
+    print(json.dumps({
+        "model": model_id,
+        "count": len(args.texts),
+        "dim": int(vecs.shape[1]),
+        "embeddings": [v.tolist() for v in vecs],
+    }, indent=2))
+    return 0
 
 
 if __name__ == "__main__":
