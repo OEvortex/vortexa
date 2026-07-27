@@ -289,23 +289,15 @@ def _run_embed(argv: list[str]) -> int:
     if not args.texts:
         raise SystemExit("at least one text string is required for embedding")
 
-    _MODEL_ALIASES = {
-        "mini": "VTXAI/vtx-embed-7M",
-        "nano": "VTXAI/vtx-embed-1M",
-    }
+    from vortexa.core.inference import VortexEmbedInference
 
-    def _resolve_model_id(model_arg: str) -> str:
-        return _MODEL_ALIASES.get(model_arg, model_arg)
-
-    model_id = _resolve_model_id(args.model)
-    from vortexa.core.inference import embed
-
-    vecs = embed(args.texts, model=model_id)
+    engine = VortexEmbedInference(args.model)
+    vecs = engine.encode(args.texts)
 
     print(json.dumps({
-        "model": model_id,
+        "model": engine.model_id,
+        "dim": engine.dim,
         "count": len(args.texts),
-        "dim": int(vecs.shape[1]),
         "embeddings": [v.tolist() for v in vecs],
     }, indent=2))
     return 0

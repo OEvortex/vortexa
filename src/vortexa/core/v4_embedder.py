@@ -96,6 +96,30 @@ class VortexEmbedderV4:
         assert self._model is not None
         return self._model.encode_batch(texts, normalize=True)
 
+    def encode(
+        self,
+        text: str,
+        *,
+        normalize: bool = True,
+        truncate_dim: Optional[int] = None,
+    ) -> npt.NDArray[np.float32]:
+        self._ensure_loaded()
+        assert self._model is not None
+        return self._model.encode(text, normalize=normalize, truncate_dim=truncate_dim)
+
+    def encode_batch(
+        self,
+        texts: List[str],
+        *,
+        normalize: bool = True,
+        truncate_dim: Optional[int] = None,
+    ) -> npt.NDArray[np.float32]:
+        if not texts:
+            return np.empty((0, 0), dtype=np.float32)
+        self._ensure_loaded()
+        assert self._model is not None
+        return self._model.encode_batch(texts, normalize=normalize, truncate_dim=truncate_dim)
+
     def search(
         self,
         query: str,
