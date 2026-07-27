@@ -65,15 +65,15 @@ from vortexa.core.inference import VortexEmbedInference
 model = VortexEmbedInference("mini")
 
 # Encode a single string
-vec = model.encode("hello world")
+vec = model.encode("India is a diverse country")
 print(vec.shape)  # (1, 256)
 
 # Encode a batch
-vecs = model.encode(["hello", "world"])
+vecs = model.encode(["Indian cricket team is strong", "Chennai is a major city"])
 print(vecs.shape)  # (2, 256)
 
 # Truncate to 128 dimensions (Matryoshka)
-vec_small = model.encode("hello world", dim=128)
+vec_small = model.encode("India has 28 states", dim=128)
 print(vec_small.shape)  # (1, 128)
 
 # Model info
@@ -85,13 +85,13 @@ print(model.dim)        # 256
 
 ```bash
 # Encode text with the default (mini) model
-vortexa embed "hello world"
+vortexa embed "India is a diverse country"
 
 # Encode with the nano model
-vortexa embed "hello world" --model nano
+vortexa embed "Indian cricket team is strong" --model nano
 
 # Truncate to 64 dimensions
-vortexa embed "hello world" --model nano --dim 64
+vortexa embed "India has 28 states" --model nano --dim 64
 
 # Batch encode from file
 vortexa embed -f queries.txt --model mini

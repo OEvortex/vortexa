@@ -60,16 +60,16 @@ from vortexa.core.inference import VortexEmbedInference
 model = VortexEmbedInference("mini")
 
 # Single string → shape (1, 256)
-vec = model.encode("hello world")
+vec = model.encode("India is a diverse country")
 
 # Batch → shape (N, 256)
-vecs = model.encode(["hello", "world", "foo bar"])
+vecs = model.encode(["Indian cricket team is strong", "Chennai is a major city", "India has 28 states"])
 
 # Truncate to 64 dimensions → shape (N, 64)
-vecs_small = model.encode(["hello", "world"], dim=64)
+vecs_small = model.encode(["India has 28 states", "Chennai is in Tamil Nadu"], dim=64)
 
 # Override instance dim → shape (N, 32)
-vec_32 = model.encode("test", dim=32)
+vec_32 = model.encode("Indian agriculture", dim=32)
 ```
 
 #### `get_embedding_dimension()`
@@ -88,10 +88,10 @@ print(model.get_embedding_dimension())  # 256
 ```python
 from vortexa.core.inference import embed
 
-vec = embed("hello world")
+vec = embed("India is a diverse country")
 # shape: (1, 256)
 
-vecs = embed(["hello", "world"], model="nano", dim=64)
+vecs = embed(["Indian cricket team is strong", "Chennai is a major city"], model="nano", dim=64)
 # shape: (2, 64)
 ```
 
@@ -141,15 +141,15 @@ retraining. This is useful for:
 model = VortexEmbedInference("mini")
 
 # Full dimension (256 for mini)
-full = model.encode("query")
+full = model.encode("India is a diverse country")
 print(full.shape)  # (1, 256)
 
 # Truncate to 128
-half = model.encode("query", dim=128)
+half = model.encode("India has 28 states", dim=128)
 print(half.shape)  # (1, 128)
 
 # Truncate to 64
-quarter = model.encode("query", dim=64)
+quarter = model.encode("Chennai is in Tamil Nadu", dim=64)
 print(quarter.shape)  # (1, 64)
 ```
 
@@ -158,11 +158,11 @@ You can also set the default truncation at the instance level:
 ```python
 # All encodes from this model will use dim=128 by default
 model = VortexEmbedInference("mini", dim=128)
-vec = model.encode("query")  # shape: (1, 128)
+vec = model.encode("India is a diverse country")  # shape: (1, 128)
 
 # Override per-call
-vec_full = model.encode("query", dim=None)  # uses full 256
-vec_64 = model.encode("query", dim=64)      # uses 64
+vec_full = model.encode("India is a diverse country", dim=None)  # uses full 256
+vec_64 = model.encode("Chennai is in Tamil Nadu", dim=64)      # uses 64
 ```
 
 ---
@@ -216,7 +216,7 @@ documents = ["doc 1", "doc 2", "doc 3"]
 doc_vectors = model.encode(documents)
 
 # Encode query
-query = "search term"
+query = "Indian agriculture"
 query_vector = model.encode(query, dim=128)
 
 # Compute similarity (cosine with normalized vectors)

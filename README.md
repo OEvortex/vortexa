@@ -358,13 +358,13 @@ similar to how sentence-transformers works but purpose-built for Vortex-Embed mo
 from vortexa.core.inference import embed
 
 # Encode a single string (default: mini model)
-vec = embed("hello world")
+vec = embed("India is a diverse country")
 
 # Encode multiple strings with the nano model
-vecs = embed(["hello", "world"], model="nano")
+vecs = embed(["Indian cricket team is strong", "Chennai is a major city"], model="nano")
 
 # Use any HuggingFace model ID
-vecs = embed(["query text"], model="VTXAI/vtx-embed-7M")
+vecs = embed(["Indian agriculture output"], model="VTXAI/vtx-embed-7M")
 
 # Shape: (1, D) for single text, (N, D) for batch
 print(vec.shape)
@@ -374,16 +374,16 @@ print(vec.shape)
 
 ```bash
 # Encode text with the mini model (default)
-vortexa embed "hello world"
+vortexa embed "India is a diverse country"
 
 # Encode with the nano model
-vortexa embed "hello world" --model nano
+vortexa embed "Indian cricket team is strong" --model nano
 
 # Encode multiple strings
-vortexa embed "hello world" "goodbye world" --model nano
+vortexa embed "India has 28 states" "Chennai is in Tamil Nadu" --model nano
 
 # Use a custom model ID
-vortexa embed "search query" --model VTXAI/vtx-embed-7M
+vortexa embed "Indian monsoon patterns" --model VTXAI/vtx-embed-7M
 ```
 
 ---

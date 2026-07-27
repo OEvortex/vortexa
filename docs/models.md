@@ -41,7 +41,7 @@ indexer = CodebaseIndexer(root="/path/to/project", model_id="VTXAI/vtx-embed-7M"
 
 # Inference with nano
 embedder = VortexEmbedInference("nano")
-vec = embedder.encode("query text")
+vec = embedder.encode("India is a diverse country")
 ```
 
 ### Using Aliases
@@ -76,16 +76,16 @@ vortexa -q "authentication" --model VTXAI/vtx-embed-1M /path/to/project
 
 ```bash
 # Encode with mini (default)
-vortexa embed "hello world"
+vortexa embed "India is a diverse country"
 
 # Encode with nano
-vortexa embed "hello world" --model nano
+vortexa embed "Indian cricket team is strong" --model nano
 
 # Encode with custom model ID
-vortexa embed "hello world" --model VTXAI/vtx-embed-7M
+vortexa embed "Indian agriculture output" --model VTXAI/vtx-embed-7M
 
 # Encode and truncate dimensions
-vortexa embed "hello world" --model nano --dim 32
+vortexa embed "India has 28 states" --model nano --dim 32
 ```
 
 ---
@@ -126,10 +126,10 @@ indexer = CodebaseIndexer(root="/path/to/project", model=embedder)
 embedder = VortexEmbedderV4("VTXAI/vtx-embed-7M")
 
 # This triggers model download (if not cached) and loading
-vec = embedder.embed("hello world")
+vec = embedder.embed("India is a diverse country")
 
 # Subsequent calls reuse the loaded model (no re-download)
-vec2 = embedder.embed("world")
+vec2 = embedder.embed("Chennai is in Tamil Nadu")
 ```
 
 ---
@@ -145,13 +145,13 @@ from vortexa.core.inference import VortexEmbedInference
 model = VortexEmbedInference("mini")
 
 # Full dimension (256)
-vec_full = model.encode("query")
+vec_full = model.encode("India is a diverse country")
 
 # Truncate to 128
-vec_128 = model.encode("query", dim=128)
+vec_128 = model.encode("India has 28 states", dim=128)
 
 # Truncate to 64
-vec_64 = model.encode("query", dim=64)
+vec_64 = model.encode("Chennai is in Tamil Nadu", dim=64)
 ```
 
 ---

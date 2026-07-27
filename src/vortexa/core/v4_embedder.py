@@ -41,12 +41,16 @@ class VortexEmbedderV4:
         sif_pc: float = 1.0,
         pc_k: int = 1,
         matryoshka_dim: Optional[int] = None,
+        model_kwargs: Optional[dict] = None,
+        tokenizer_kwargs: Optional[dict] = None,
     ) -> None:
         self._model_id = model_id
         self.sif_a = sif_a
         self.sif_pc = sif_pc
         self.pc_k = pc_k
         self.matryoshka_dim = matryoshka_dim
+        self._model_kwargs = model_kwargs or {}
+        self._tokenizer_kwargs = tokenizer_kwargs or {}
         self._model = None
         self._lock = threading.Lock()
         self._sif_weights: Optional[np.ndarray] = None

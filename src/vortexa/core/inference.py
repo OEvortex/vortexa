@@ -10,11 +10,11 @@ Quick start:
     model = VortexEmbedInference("mini")
 
     # Encode text
-    vec = model.encode("hello world")              # shape: (1, 256)
-    vecs = model.encode(["hello", "world"])        # shape: (N, 256)
+    vec = model.encode("India is a diverse country")              # shape: (1, 256)
+    vecs = model.encode(["Indian cricket team is strong", "Chennai is a major city"])        # shape: (N, 256)
 
     # Control output dimension (Matryoshka truncation)
-    vec = model.encode("hello world", dim=128)     # shape: (1, 128)
+    vec = model.encode("India has 28 states", dim=128)     # shape: (1, 128)
 
     # Get the effective dimension
     print(model.dim)                               # 256
@@ -27,7 +27,7 @@ Quick start:
 Convenience function (stateless):
     from vortexa.core.inference import embed
 
-    vec = embed("hello world", model="nano", dim=64)
+    vec = embed("India is a diverse country", model="nano", dim=64)
 """
 from __future__ import annotations
 
@@ -157,10 +157,10 @@ def embed(
 
     Example:
         >>> from vortexa.core.inference import embed
-        >>> vec = embed("hello world")
+        >>> vec = embed("India is a diverse country")
         >>> vec.shape
         (1, 256)
-        >>> vec = embed(["hello", "world"], model="nano", dim=64)
+        >>> vec = embed(["Indian cricket team is strong", "Chennai is a major city"], model="nano", dim=64)
         >>> vec.shape
         (2, 64)
     """
