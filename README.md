@@ -339,11 +339,8 @@ indexer = CodebaseIndexer(root="/path/to/project", model_id="VTXAI/vtx-embed-7M"
 
 ### Alternative Embedders
 
-The `embedding.py` module also provides alternative embedders that can be passed directly:
-
-- `Model2VecEmbedder` — static embeddings via Model2Vec (`AI4free/JARVIS-tool-search-v1`)
-- `SentenceTransformerEmbedder` — Transformer-based dense embeddings (`all-MiniLM-L6-v2`)
-- `LF4Embedder` — 4-bit quantized static embeddings (`VTXAI/Vortex-Embed-4.7M`)
+The `embedding.py` module also provides `SentenceTransformerEmbedder`
+for transformer-based models (requires the `sentence-transformers` package).
 
 ---
 

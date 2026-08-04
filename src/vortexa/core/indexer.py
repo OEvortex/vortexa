@@ -21,7 +21,7 @@ from typing import cast
 import lmdb
 import numpy as np
 from vortexa.core.chunking import chunk_source
-from vortexa.core.embedding import Embedder, LF4Embedder
+from vortexa.core.embedding import Embedder
 from vortexa.core.language import detect_language, get_extensions
 from vortexa.core.types import (
     Chunk,

@@ -26,7 +26,11 @@
 ### Removed
 - Deleted `src/vortexa/core/v3_embedder.py` (superseded by v4_embedder.py)
 - Deleted `src/vortexa/core/lf4_v3_model.py` (superseded by lf4_v4_model.py)
-- Deleted old V2-era test files (`v2_test.py`, `v2_line_test.py`, `v2_tune.py`)
+- Deleted `src/vortexa/core/lf4_model.py` (old LF4 model for `VTXAI/Vortex-Embed-4.7M`)
+- Deleted `Model2VecEmbedder` class (used `AI4free/JARVIS-tool-search-v1`)
+- Deleted `LF4Embedder` class (used `VTXAI/Vortex-Embed-4.7M`)
+- Removed `model2vec` dependency from `pyproject.toml`
+- Old V2-era test files (`v2_test.py`, `v2_line_test.py`, `v2_tune.py`)
 
 ### Fixed
 - Cleaned up stale `__pycache__` directories

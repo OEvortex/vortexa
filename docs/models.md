@@ -90,31 +90,7 @@ vortexa embed "India has 28 states" --model nano --dim 32
 
 ---
 
-## Alternative Embedders
-
-The `embedding.py` module provides additional embedder classes that
-can be passed directly to `CodebaseIndexer`. These are not the
-default but are available for specific use cases:
-
-| Embedder | Default Model | Type | Notes |
-|----------|---------------|------|-------|
-| `Model2VecEmbedder` | `AI4free/JARVIS-tool-search-v1` | Static embeddings via Model2Vec | Fast, no SIF+PC |
-| `SentenceTransformerEmbedder` | `all-MiniLM-L6-v2` | Transformer-based dense embeddings | Requires `sentence-transformers` |
-| `LF4Embedder` | `VTXAI/Vortex-Embed-4.7M` | 4-bit quantized static embeddings | Older Vortex-Embed variant |
-
-### Example: Using an Alternative Embedder
-
-```python
-from vortexa.core.embedding import Model2VecEmbedder
-from vortexa.core.indexer import CodebaseIndexer
-
-embedder = Model2VecEmbedder(model_id="AI4free/JARVIS-tool-search-v1")
-indexer = CodebaseIndexer(root="/path/to/project", model=embedder)
-```
-
 ---
-
-## How Models Are Loaded
 
 1. `VortexEmbedderV4` is created with a `model_id`
 2. On first `embed()` or `embed_batch()` call, it lazy-loads the model
