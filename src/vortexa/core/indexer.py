@@ -110,7 +110,7 @@ class CodebaseIndexer:
                 self._model = model
         else:
             from vortexa.core.v4_embedder import VortexEmbedderV4
-            self._embedder = VortexEmbedderV4(model_id)
+            self._embedder = VortexEmbedderV4(model_id or "VTXAI/vtx-embed-7M")
             self._model = self._embedder
 
         # In-memory state
