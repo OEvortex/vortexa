@@ -20,14 +20,17 @@ from typing import cast
 
 import lmdb
 import numpy as np
+
 from vortexa.core.chunking import chunk_source
 from vortexa.core.embedding import Embedder
+from vortexa.core.graph import RepoGraph
 from vortexa.core.language import detect_language, get_extensions
 from vortexa.core.types import (
     Chunk,
     ChunkConfig,
     Encoder,
     IndexStats,
+    SearchMode,
     SearchResult,
 )
 from vortexa.search.search import search as _search
@@ -120,6 +123,7 @@ class CodebaseIndexer:
         self.chunk_memo: dict[str, str] = {}  # chunk_id -> chunk_hash (for memoization)
         self._vector_store: VectorStore | None = None
         self._bm25_index: BM25Index | None = None
+        self._repo_graph: RepoGraph | None = None
 
         # Stats
         self._memo_hits = 0
@@ -302,6 +306,283 @@ class CodebaseIndexer:
             top_k=top_k,
             alpha=alpha,
         )
+
+    # ── Context resolution ──────────────────────────────────────────────
+
+    def _build_repo_graph(self) -> RepoGraph:
+        """Build a repo graph from indexed Python files."""
+        from vortexa.core.graph import RepoGraphBuilder
+        builder = RepoGraphBuilder()
+        files: dict[str, str] = {}
+        for rel in self.file_hashes:
+            file_path = self.root / rel
+            if file_path.suffix == ".py":
+                try:
+                    files[rel] = file_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    pass
+        return builder.build(files)
+
+    def _find_test_files(self, primary_files: set[str]) -> list[str]:
+        test_files: list[str] = []
+        for file_path in primary_files:
+            path = Path(file_path)
+            stem = path.stem
+            suffix = path.suffix
+            parent = path.parent
+            candidates = [
+                parent / f"test_{stem}{suffix}",
+                parent / f"{stem}_test{suffix}",
+            ]
+            for candidate in candidates:
+                candidate_str = str(candidate)
+                if candidate_str != file_path and candidate_str not in test_files:
+                    if candidate_str in self.file_hashes:
+                        test_files.append(candidate_str)
+        return test_files
+
+    def _find_imports_importers(
+        self, primary_files: set[str], graph: RepoGraph
+    ) -> tuple[list[str], list[str]]:
+        imports: list[str] = []
+        imported_by: list[str] = []
+        for file_path in primary_files:
+            file_node = graph.find_file_node(file_path)
+            if file_node is None:
+                continue
+            for edge in graph.edges_from(file_node.id, kind="IMPORTS"):
+                target = graph.nodes.get(edge.dst)
+                if target and target.path and target.path not in primary_files:
+                    if target.path not in imports:
+                        imports.append(target.path)
+            for edge in graph.edges_from(file_node.id, kind="IMPORTS_FROM"):
+                target = graph.nodes.get(edge.dst)
+                if target and target.path and target.path not in primary_files:
+                    if target.path not in imports:
+                        imports.append(target.path)
+            for edge in graph.edges_to(file_node.id, kind="IMPORTS"):
+                source = graph.nodes.get(edge.src)
+                if source and source.path and source.path not in primary_files:
+                    if source.path not in imported_by:
+                        imported_by.append(source.path)
+            for edge in graph.edges_to(file_node.id, kind="IMPORTS_FROM"):
+                source = graph.nodes.get(edge.src)
+                if source and source.path and source.path not in primary_files:
+                    if source.path not in imported_by:
+                        imported_by.append(source.path)
+        return imports, imported_by
+
+    def _find_symbols(self, primary_files: set[str], graph: RepoGraph) -> list[dict]:
+        symbols: list[dict] = []
+        seen: set[str] = set()
+        skip_kinds = {"file"}
+        for file_path in primary_files:
+            for node_id in graph._file_symbols.get(file_path, set()):
+                if node_id in seen:
+                    continue
+                seen.add(node_id)
+                node = graph.nodes.get(node_id)
+                if not node or node.kind in skip_kinds:
+                    continue
+                symbols.append({
+                    "name": node.name,
+                    "kind": node.kind,
+                    "file": node.path,
+                    "line": node.line,
+                })
+        return symbols[:15]
+
+    def _find_callers_callees(
+        self, primary_files: set[str], graph: RepoGraph
+    ) -> tuple[list[dict], list[dict]]:
+        callers: list[dict] = []
+        callees: list[dict] = []
+        for file_path in primary_files:
+            for node_id in graph._file_symbols.get(file_path, set()):
+                node = graph.nodes.get(node_id)
+                if not node:
+                    continue
+                for edge in graph.edges_from(node_id, kind="CALLS"):
+                    target = graph.nodes.get(edge.dst)
+                    if target and target.path != file_path:
+                        callees.append({
+                            "name": target.name,
+                            "file": target.path,
+                            "line": target.line,
+                        })
+                        break
+                for edge in graph.edges_to(node_id, kind="CALLS"):
+                    source = graph.nodes.get(edge.src)
+                    if source and source.path != file_path:
+                        callers.append({
+                            "name": source.name,
+                            "file": source.path,
+                            "line": source.line,
+                        })
+                        break
+        return callers[:10], callees[:10]
+
+    def _find_dependency_chain(
+        self, primary_files: set[str], graph: RepoGraph, depth: int = 1
+    ) -> list[str]:
+        chain: list[str] = []
+        visited: set[str] = set(primary_files)
+        for file_path in primary_files:
+            file_node = graph.find_file_node(file_path)
+            if file_node is None:
+                continue
+            expanded = graph.expand([file_node.id], max_hops=depth, max_size=50)
+            for nid, hop in expanded:
+                if hop == 0:
+                    continue
+                node = graph.nodes.get(nid)
+                if node and node.path and node.path not in visited:
+                    visited.add(node.path)
+                    chain.append(node.path)
+        return chain[:10]
+
+    def _expand_context(
+        self, query: str, primary: list[SearchResult], graph: RepoGraph
+    ) -> dict:
+        primary_files = {r.chunk.file_path for r in primary}
+        test_files = self._find_test_files(primary_files)
+        imports, imported_by = self._find_imports_importers(primary_files, graph)
+        symbols = self._find_symbols(primary_files, graph)
+        callers, callees = self._find_callers_callees(primary_files, graph)
+        dependency_chain = self._find_dependency_chain(primary_files, graph, depth=1)
+
+        scores = [r.score for r in primary if r.score > 0]
+        confidence = sum(scores) / len(scores) if scores else 0.0
+
+        related_files = list(
+            primary_files | set(imports) | set(imported_by) | set(test_files)
+        )
+
+        return {
+            "query": query,
+            "confidence": round(confidence, 3),
+            "primary_chunks": primary,
+            "related_files": related_files,
+            "test_files": test_files,
+            "imports": imports,
+            "imported_by": imported_by,
+            "symbols": symbols,
+            "callers": callers,
+            "callees": callees,
+            "dependency_chain": dependency_chain,
+            "total_tokens": sum(len(r.chunk.content) for r in primary) // 4,
+        }
+
+    def _compress_pack(self, pack: dict) -> dict:
+        if not pack.get("primary_chunks"):
+            return pack
+        pack = dict(pack)
+        pack["primary_chunks"] = pack["primary_chunks"][:10]
+        pack["related_files"] = pack["related_files"][:5]
+        pack["test_files"] = pack["test_files"][:3]
+        pack["imports"] = pack["imports"][:2]
+        pack["imported_by"] = pack["imported_by"][:1]
+        pack["symbols"] = pack["symbols"][:5]
+        pack["callers"] = pack["callers"][:2]
+        pack["callees"] = pack["callees"][:2]
+        pack["dependency_chain"] = pack["dependency_chain"][:3]
+        pack["total_tokens"] = sum(len(r.chunk.content) for r in pack["primary_chunks"]) // 4
+        return pack
+
+    def _empty_pack(self, query: str) -> dict:
+        return {
+            "query": query,
+            "confidence": 0.0,
+            "primary_chunks": [],
+            "related_files": [],
+            "test_files": [],
+            "imports": [],
+            "imported_by": [],
+            "symbols": [],
+            "callers": [],
+            "callees": [],
+            "dependency_chain": [],
+            "total_tokens": 0,
+        }
+
+    def resolve(self, query: str, top_k: int = 5) -> dict:
+        """Full context resolution: search + expand + compress."""
+        if not self.chunks:
+            return self._empty_pack(query)
+        primary = self.search(query, top_k=top_k)
+        if not primary:
+            return self._empty_pack(query)
+        graph = self._build_repo_graph()
+        pack = self._expand_context(query, primary, graph)
+        return self._compress_pack(pack)
+
+    def explain(self, code_location: str) -> dict:
+        """Explain a code location: find symbol, expand context, return pack."""
+        query = code_location
+        if ":" in code_location:
+            parts = code_location.rsplit(":", 1)
+            if parts[0].endswith(
+                (".py", ".js", ".ts", ".rs", ".go", ".java", ".jsx", ".tsx")
+            ):
+                file_path = parts[0]
+                try:
+                    line = int(parts[1])
+                except ValueError:
+                    line = 0
+                chunks_here = [c for c in self.chunks if c.file_path == file_path]
+                if line > 0:
+                    chunks_here = [
+                        c for c in chunks_here if c.start_line <= line <= c.end_line
+                    ]
+                if chunks_here:
+                    primary = [
+                        SearchResult(
+                            chunk=chunks_here[0], score=1.0, source=SearchMode.SEMANTIC
+                        )
+                    ]
+                    graph = self._build_repo_graph()
+                    pack = self._expand_context(query, primary, graph)
+                    return self._compress_pack(pack)
+        return self.resolve(code_location, top_k=3)
+
+    def format_context(self, pack: dict) -> str:
+        """Format a context pack as a human-readable string for agents."""
+        lines = [f"[{pack['confidence']:.2f}] {pack['query']}"]
+        if pack.get("primary_chunks"):
+            lines.append(f"  ({len(pack['primary_chunks'])} files)")
+        lines.append("")
+        for i, result in enumerate(pack.get("primary_chunks", []), 1):
+            chunk = result.chunk
+            span = (
+                f"{chunk.start_line}-{chunk.end_line}"
+                if chunk.end_line != chunk.start_line
+                else str(chunk.start_line)
+            )
+            lines.append(f"  {i}. {chunk.file_path}:{span}  [{result.score:.2f}]")
+            snippet = chunk.content.strip()[:300]
+            for line in snippet.split("\n"):
+                lines.append(f"     {line}")
+        if pack.get("symbols"):
+            names = [s["name"] for s in pack["symbols"][:6]]
+            if len(pack["symbols"]) > 6:
+                names.append("...")
+            lines.append(f"  sym: {' '.join(names)}")
+        hints = []
+        if pack.get("test_files"):
+            hints.append(
+                f"tests: {', '.join(f.split('/')[-1] for f in pack['test_files'][:2])}"
+            )
+        if pack.get("imports"):
+            hints.append(
+                f"deps: {', '.join(f.split('/')[-1] for f in pack['imports'][:2])}"
+            )
+        if pack.get("callers"):
+            hints.append(
+                f"callers: {', '.join(c['name'] for c in pack['callers'][:2])}"
+            )
+        if hints:
+            lines.append(f"  {' | '.join(hints)}")
+        return "\n".join(lines)
 
     def find_related(self, chunk_idx: int, top_k: int = 5) -> list[SearchResult]:
         """Find chunks semantically similar to a given chunk (cocoindex find_related)."""

@@ -96,3 +96,12 @@ class IndexStats:
     memo_hits: int = 0  # Chunks skipped due to memoization
     memo_misses: int = 0  # Chunks re-embedded
     index_time_ms: float = 0  # Elapsed wall-clock time for the index run
+
+
+@dataclass(frozen=True, slots=True)
+class GraphContext:
+    """Compact structural context for one search-result file."""
+
+    key_symbol: str = ""
+    incoming: tuple[str, ...] = ()
+    outgoing: tuple[str, ...] = ()

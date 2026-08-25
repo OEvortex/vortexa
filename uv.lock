@@ -2826,7 +2826,7 @@ wheels = [
 
 [[package]]
 name = "vortexa"
-version = "0.3.1"
+version = "0.3.4"
 source = { editable = "." }
 dependencies = [
     { name = "bm25s" },

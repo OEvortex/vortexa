@@ -92,6 +92,24 @@ class RepoGraph:
             return [e.dst if direction == "out" else e.src for e in edges if e.kind == kind]
         return [e.dst if direction == "out" else e.src for e in edges]
 
+    def edges_from(self, node_id: str, kind: Optional[str] = None) -> List[GraphEdge]:
+        return [e for e in self._out.get(node_id, []) if kind is None or e.kind == kind]
+
+    def edges_to(self, node_id: str, kind: Optional[str] = None) -> List[GraphEdge]:
+        return [e for e in self._in.get(node_id, []) if kind is None or e.kind == kind]
+
+    def find_file_node(self, file_path: str) -> Optional[GraphNode]:
+        for node in self.nodes.values():
+            if node.kind == "file" and node.path == file_path:
+                return node
+        return None
+
+    def find_nodes_in_file(self, file_path: str) -> List[GraphNode]:
+        return [self.nodes[nid] for nid in self._file_symbols.get(file_path, set()) if nid in self.nodes]
+
+    def find_nodes_by_name(self, name: str) -> List[GraphNode]:
+        return [self.nodes[nid] for nid in self._name_index.get(name, set()) if nid in self.nodes]
+
     def expand(self, seed_ids: List[str], max_hops: int = 2, max_size: int = 100) -> List[Tuple[str, int]]:
         """BFS from seed nodes, return (node_id, hop_count) pairs."""
         visited: Set[str] = set()
@@ -238,6 +256,7 @@ class RepoGraphBuilder:
                 candidates = self.graph.resolve_name(name)
                 for cid in candidates[:3]:  # limit candidates
                     self.graph.add_edge(file_id, cid, "REFERENCES", weight=0.3)
+                    self.graph.add_edge(file_id, cid, "CALLS", weight=0.3)
 
     def build(self, files: Dict[str, str]) -> RepoGraph:
         """Build the graph from a {path: content} dict."""
