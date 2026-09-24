@@ -77,7 +77,7 @@ vec_small = model.encode("India has 28 states", dim=128)
 print(vec_small.shape)  # (1, 128)
 
 # Model info
-print(model.model_id)   # VTXAI/vtx-embed-7M
+print(model.model_id)   # VTXAI/vtx-embed-7M-lf2
 print(model.dim)        # 256
 ```
 

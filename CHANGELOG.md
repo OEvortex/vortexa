@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.5] - 2026-09-24
+
+### Changed
+- Made native LF2 checkpoints the default for the `mini` and `nano` aliases in the Python API, CLI, and indexer.
+- Added `mini-full` and `nano-full` aliases for the original LF4 checkpoints.
+- Kept `-f`/`--fast` as a compatibility flag for explicitly selecting LF2.
+- Bumped the package version to `0.3.5`.
+
+### Added
+- Added the Agent Skills-compatible `skills/vortexa/SKILL.md` workflow guide.
+- Expanded the MCP server from one `search` tool to `search`, `resolve`, and `explain` tools.
+- Added feature-level graph context and symbol/file explanation over MCP.
+
 ## [0.3.1] - Unreleased
 
 ### Added

@@ -28,6 +28,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
 - [CLI Search](#cli-search)
 - [MCP Server](#mcp-server)
   - [Usage with Claude Code / Cursor](#usage-with-claude-code--cursor)
+- [Agent Skill](#agent-skill)
 - [Architecture](#architecture)
 - [Dependencies](#dependencies)
 - [License](#license)
@@ -42,7 +43,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
 
 vortexa is a standalone **codebase indexing and semantic search engine** designed for AI agents and developers. It builds a persistent, hybrid search index over source code using:
 
-- **Dense retrieval** via VortexEmbedderV4 (on-the-fly LF4 4-bit dequant, SIF+PC, Matryoshka) or static embeddings (Model2Vec / SentenceTransformers)
+- **Dense retrieval** via VortexEmbedderV4 (native LF2/LF4 dequant, SIF+PC, Matryoshka) or static embeddings (Model2Vec / SentenceTransformers)
 - **Sparse retrieval** via BM25 keyword scoring
 - **AST-aware chunking** that respects function and class boundaries via tree-sitter
 - **LMDB-backed storage** for fast, persistent vector and chunk storage
@@ -91,7 +92,7 @@ vortexa can run as a **standalone Python library**, be embedded into any agent, 
 </tr>
 <tr>
 <td><strong>MCP server</strong></td>
-<td>Expose as a single <code>search</code> tool for any MCP-compatible agent (Claude Code, Cursor, etc.)</td>
+<td>Expose <code>search</code>, <code>resolve</code>, and <code>explain</code> tools for MCP-compatible agents (Claude Code, Cursor, etc.)</td>
 </tr>
 <tr>
 <td><strong>Zero mandatory heavy deps</strong></td>
@@ -275,7 +276,8 @@ Useful flags:
 | `--force` | Force a full re-index before searching. |
 | `--no-index` | Search the existing index only. |
 | `--plain` | Print human-readable results instead of JSON. |
-| `--model` | Embedding model ID or alias (`mini`, `nano`). Default: `mini`. |
+| `--model` | Embedding model ID or alias (`mini`, `nano`; both use LF2 by default). Use `mini-full` or `nano-full` for LF4. |
+| `-f`, `--fast` | Explicitly select LF2 for a full-model alias. The `mini` and `nano` aliases already use LF2. |
 
 By default CLI output is JSON:
 
@@ -303,14 +305,18 @@ vortexa-serve
 
 ## Model Configuration
 
-vortexa supports configurable embedding models. The default is `mini` (`VTXAI/vtx-embed-7M`).
+vortexa supports configurable embedding models. The default is `mini`
+(`VTXAI/vtx-embed-7M-lf2`), using the native LF2 2-bit checkpoint. Use
+`mini-full` or `nano-full` to select the original LF4 checkpoints.
 
 ### Available Models
 
 | Alias | Model ID | Description |
 |-------|----------|-------------|
-| `mini` | `VTXAI/vtx-embed-7M` | Default. 7M-parameter Vortex-Embed v4.5 with LF4 4-bit dequant, SIF+PC, Matryoshka. |
-| `nano` | `VTXAI/vtx-embed-1M` | Lightweight 1M-parameter variant. Lower RAM, lower dim. |
+| `mini` | `VTXAI/vtx-embed-7M-lf2` | Default native 2-bit 7M model. 256-dimensional embeddings. |
+| `nano` | `VTXAI/vtx-embed-1M-lf2` | Default native 2-bit 1M model. 64-dimensional embeddings. |
+| `mini-full` | `VTXAI/vtx-embed-7M` | Original LF4 checkpoint for maximum quality. |
+| `nano-full` | `VTXAI/vtx-embed-1M` | Original LF4 lightweight checkpoint. |
 
 ### CLI Usage
 
@@ -330,11 +336,14 @@ vortexa -q "authentication" --model VTXAI/vtx-embed-1M /path/to/project
 ```python
 from vortexa.core.indexer import CodebaseIndexer
 
-# Use nano model
-indexer = CodebaseIndexer(root="/path/to/project", model_id="VTXAI/vtx-embed-1M")
+# Use nano model (LF2 by default)
+indexer = CodebaseIndexer(root="/path/to/project", model_id="nano")
 
-# Use mini model (default)
-indexer = CodebaseIndexer(root="/path/to/project", model_id="VTXAI/vtx-embed-7M")
+# Use mini model (LF2 by default)
+indexer = CodebaseIndexer(root="/path/to/project", model_id="mini")
+
+# Opt into the original LF4 checkpoint
+indexer = CodebaseIndexer(root="/path/to/project", model_id="mini-full")
 ```
 
 ### Alternative Embedders
@@ -406,11 +415,17 @@ On startup it indexes the current working directory and prints stats to stderr:
 [vortexa] Auto-reindex watcher started (polling every 3s)
 ```
 
-The server exposes one tool:
+The server exposes three tools:
 
 | Tool | Description | Arguments |
 |------|-------------|-----------|
 | `search` | Semantic + BM25 hybrid code search | `query` (str), `top_k` (int, default 10) |
+| `resolve` | Feature-level search with graph context, tests, imports, callers, and callees | `query` (str), `top_k` (int, default 5) |
+| `explain` | Explain a file, `file:line` location, or symbol | `location` (str) |
+
+Use `search` for discovery, `resolve` when you need feature context, and
+`explain` when the file or symbol is already known. The server indexes the
+current directory and auto-reindexes it while running.
 
 ### Usage with Claude Code / Cursor
 
@@ -429,6 +444,36 @@ Add to your MCP configuration file (`~/.cursor/mcp.json` or Claude Code's `mcp_s
 ```
 
 The agent will now have access to semantic code search — it can find functions, classes, and patterns by describing them in natural language. This is significantly more effective than `grep` or `rg` for exploratory queries.
+
+---
+
+<div align="center">
+
+## Agent Skill
+
+</div>
+
+Vortexa ships with an Agent Skills-compatible skill at
+[`skills/vortexa/SKILL.md`](skills/vortexa/SKILL.md). It teaches compatible
+agents when to prefer Vortexa, how to choose between `search`, `resolve`, and
+`explain`, and how to interpret returned file paths, line ranges, scores, and
+graph context.
+
+The skill follows the standard `SKILL.md` structure: YAML frontmatter with a
+lowercase hyphenated name and trigger-oriented description, followed by
+workflow instructions. Copy or link the `skills/vortexa` directory into the
+skills directory used by your agent environment.
+
+```markdown
+---
+name: vortexa
+description: Use Vortexa to index and semantically search local codebases...
+---
+```
+
+Use the installed MCP server when available; otherwise the same workflow is
+available through the `vortexa search`, `vortexa resolve`, and
+`vortexa explain` commands.
 
 ---
 
@@ -578,7 +623,7 @@ graph TD
 | `bm25s` | Yes | Fast BM25 keyword index and persistence |
 | `pathspec` | Yes | `.gitignore` pattern matching in file walker |
 | `model2vec` | Optional | Alternative static embeddings |
-| `huggingface-hub` | Yes (default model) | Loading `VTXAI/vtx-embed-7M` (mini) or `VTXAI/vtx-embed-1M` (nano) |
+| `huggingface-hub` | Yes (default model) | Loading LF2 defaults (`VTXAI/vtx-embed-7M-lf2`, `VTXAI/vtx-embed-1M-lf2`) |
 | `tokenizers` | Yes (default model) | HF tokenizer for embedding model |
 | `safetensors` | Yes (default model) | Safe tensor loading for 4-bit weights |
 | `sentence-transformers` | Optional | Transformer-based dense embeddings |

@@ -115,8 +115,10 @@ vecs = embed(["Indian cricket team is strong", "Chennai is a major city"], model
 
 | Alias | Actual Model ID | Description |
 |-------|-----------------|-------------|
-| `mini` | `VTXAI/vtx-embed-7M` | Default. 7M-parameter Vortex-Embed v4.5 with LF4 4-bit dequant, SIF+PC, Matryoshka. 256-dimensional embeddings. |
-| `nano` | `VTXAI/vtx-embed-1M` | Lightweight 1M-parameter variant. Lower RAM, lower dimension. |
+| `mini` | `VTXAI/vtx-embed-7M-lf2` | Default native 2-bit 7M model with 256-dimensional embeddings. |
+| `nano` | `VTXAI/vtx-embed-1M-lf2` | Default native 2-bit 1M model with 64-dimensional embeddings. |
+| `mini-full` | `VTXAI/vtx-embed-7M` | Original LF4 7M checkpoint. |
+| `nano-full` | `VTXAI/vtx-embed-1M` | Original LF4 1M checkpoint. |
 
 Any HuggingFace model name or path is also accepted directly:
 

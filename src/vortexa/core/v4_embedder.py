@@ -1,4 +1,4 @@
-"""VortexEmbedderV4 — v4 embedder with on-the-fly LF4 dequantization and SIF+PC.
+"""VortexEmbedderV4 — v4 embedder with native LF4/LF2 dequantization and SIF+PC.
 
 Differences from VortexEmbedderV3:
   - v4 weights from VTXAI/vtx-embed-7M (improved Spearman, on-the-fly dequant)
@@ -8,12 +8,14 @@ Differences from VortexEmbedderV3:
   - Top-K principal component removal (PC)
   - Optional corpus-level SIF/PC fitting
 
-Default model: VTXAI/vtx-embed-7M.
+Default model: VTXAI/vtx-embed-7M-lf2.
 """
 from __future__ import annotations
 
+import json
 import logging
 import threading
+from pathlib import Path
 from typing import List, Optional
 
 import numpy as np
@@ -21,17 +23,30 @@ import numpy.typing as npt
 
 logger = logging.getLogger(__name__)
 
+_MODEL_ALIASES = {
+    "mini": "VTXAI/vtx-embed-7M-lf2",
+    "nano": "VTXAI/vtx-embed-1M-lf2",
+    "mini-lf2": "VTXAI/vtx-embed-7M-lf2",
+    "nano-lf2": "VTXAI/vtx-embed-1M-lf2",
+    "mini-full": "VTXAI/vtx-embed-7M",
+    "nano-full": "VTXAI/vtx-embed-1M",
+}
+
 
 class VortexEmbedderV4:
-    """Thread-safe v4 embedder with SIF+PC and on-the-fly LF4 dequantization.
+    """Thread-safe v4 embedder with SIF+PC and native LF4/LF2 dequantization.
 
-    Default model: VTXAI/vtx-embed-7M.
+    Default model: VTXAI/vtx-embed-7M-lf2.
     Lazy-loads on first use, cached thereafter.
     """
 
-    DEFAULT_MODEL_ID = "VTXAI/vtx-embed-7M"
-    MINI_MODEL_ID = "VTXAI/vtx-embed-7M"
-    NANO_MODEL_ID = "VTXAI/vtx-embed-1M"
+    DEFAULT_MODEL_ID = "VTXAI/vtx-embed-7M-lf2"
+    MINI_MODEL_ID = "VTXAI/vtx-embed-7M-lf2"
+    NANO_MODEL_ID = "VTXAI/vtx-embed-1M-lf2"
+    MINI_FULL_MODEL_ID = "VTXAI/vtx-embed-7M"
+    NANO_FULL_MODEL_ID = "VTXAI/vtx-embed-1M"
+    MINI_LF2_MODEL_ID = "VTXAI/vtx-embed-7M-lf2"
+    NANO_LF2_MODEL_ID = "VTXAI/vtx-embed-1M-lf2"
 
     def __init__(
         self,
@@ -44,7 +59,7 @@ class VortexEmbedderV4:
         model_kwargs: Optional[dict] = None,
         tokenizer_kwargs: Optional[dict] = None,
     ) -> None:
-        self._model_id = model_id
+        self._model_id = _MODEL_ALIASES.get(model_id, model_id)
         self.sif_a = sif_a
         self.sif_pc = sif_pc
         self.pc_k = pc_k
@@ -62,13 +77,34 @@ class VortexEmbedderV4:
         assert self._model is not None
         return self._model.dim
 
+    def _load_model(self):
+        """Load LF4 or LF2 after resolving a Hub ID to a local checkpoint."""
+        model_path = Path(self._model_id)
+        if not model_path.is_dir():
+            from huggingface_hub import snapshot_download
+
+            model_path = Path(snapshot_download(self._model_id))
+
+        config_path = model_path / "config.json"
+        if not config_path.is_file():
+            raise FileNotFoundError(f"model config not found: {config_path}")
+        config = json.loads(config_path.read_text())
+        quantization = str(config.get("quantization", "")).lower()
+        if quantization == "lf2":
+            from vortexa.core.lf2_model import VortexEmbedLF2
+
+            return VortexEmbedLF2.from_pretrained(model_path, matryoshka_dim=self.matryoshka_dim)
+
+        from vortexa.core.lf4_v4_model import VortexEmbedV4_5
+
+        return VortexEmbedV4_5.from_pretrained(model_path, matryoshka_dim=self.matryoshka_dim)
+
     def _ensure_loaded(self) -> None:
         if self._model is None:
             with self._lock:
                 if self._model is None:
                     logger.info("Loading V4 embedding model: %s", self._model_id)
-                    from vortexa.core.lf4_v4_model import VortexEmbedV4_5
-                    self._model = VortexEmbedV4_5.from_pretrained(self._model_id)
+                    self._model = self._load_model()
                     self._model.sif_a = self.sif_a
                     self._model.sif_pc = self.sif_pc
                     self._model.pc_k = self.pc_k

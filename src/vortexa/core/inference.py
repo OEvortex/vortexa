@@ -24,6 +24,10 @@ Quick start:
     nano = VortexEmbedInference("nano")
     print(nano.dim)                                # nano's native dim
 
+    # Use LF2 models (native 2-bit quantization)
+    mini_lf2 = VortexEmbedInference("mini-lf2")
+    nano_lf2 = VortexEmbedInference("nano-lf2")
+
 Convenience function (stateless):
     from vortexa.core.inference import embed
 
@@ -41,12 +45,24 @@ import numpy as np
 import numpy.typing as npt
 
 _MODEL_ALIASES = {
-    "mini": "VTXAI/vtx-embed-7M",
-    "nano": "VTXAI/vtx-embed-1M",
+    "mini": "VTXAI/vtx-embed-7M-lf2",
+    "nano": "VTXAI/vtx-embed-1M-lf2",
+    "mini-lf2": "VTXAI/vtx-embed-7M-lf2",
+    "nano-lf2": "VTXAI/vtx-embed-1M-lf2",
+    "mini-full": "VTXAI/vtx-embed-7M",
+    "nano-full": "VTXAI/vtx-embed-1M",
+}
+_FAST_MODEL_IDS = {
+    "mini-full": _MODEL_ALIASES["mini-lf2"],
+    "nano-full": _MODEL_ALIASES["nano-lf2"],
+    _MODEL_ALIASES["mini-full"]: _MODEL_ALIASES["mini-lf2"],
+    _MODEL_ALIASES["nano-full"]: _MODEL_ALIASES["nano-lf2"],
 }
 
 
-def _resolve_model_id(model: str) -> str:
+def _resolve_model_id(model: str, *, fast: bool = False) -> str:
+    if fast and model in _FAST_MODEL_IDS:
+        return _FAST_MODEL_IDS[model]
     return _MODEL_ALIASES.get(model, model)
 
 
@@ -83,15 +99,18 @@ def similarity(
 class VortexEmbedInference:
     """A sentence-transformers-style inference engine for Vortex-Embed models.
 
-    Supports on-the-fly LF4 4-bit dequantization, SIF+PC weighting, and
+    Supports on-the-fly LF4/LF2 dequantization, SIF+PC weighting, and
     Matryoshka representation learning for dimension truncation.
 
     Args:
-        model: Model ID or alias (``mini``, ``nano``, or any
-            HuggingFace model name). Default: ``mini``.
+        model: Model ID or alias (``mini``, ``nano``, ``mini-full``, ``nano-full``, or any
+            HuggingFace model name). ``mini`` and ``nano`` use LF2 by default.
+            Default: ``mini``.
         dim: If set, truncate all output embeddings to this number of
             dimensions via Matryoshka truncation. Can be overridden per-call
             in ``encode()``.
+        fast: Explicitly select LF2 for a full-model alias. This is already
+            the default for ``mini`` and ``nano``.
 
     Example:
         >>> from vortexa.core.inference import VortexEmbedInference
@@ -104,10 +123,19 @@ class VortexEmbedInference:
         (1, 128)
         >>> model.dim
         256
+        >>> # Use fast native 2-bit inference
+        >>> lf2 = VortexEmbedInference("mini", fast=True)
+        >>> vec = lf2.encode("Native 2-bit embedding text...")
     """
 
-    def __init__(self, model: str = "mini", *, dim: int | None = None) -> None:
-        self._model_id = _resolve_model_id(model)
+    def __init__(
+        self,
+        model: str = "mini",
+        *,
+        dim: int | None = None,
+        fast: bool = False,
+    ) -> None:
+        self._model_id = _resolve_model_id(model, fast=fast)
         from vortexa.core.v4_embedder import VortexEmbedderV4
 
         self._embedder = VortexEmbedderV4(self._model_id)
@@ -202,6 +230,7 @@ def embed(
     model: str = "mini",
     dim: int | None = None,
     normalize: bool = True,
+    fast: bool = False,
 ) -> npt.NDArray[np.float32]:
     """Encode text strings into dense vector embeddings (stateless convenience).
 
@@ -210,12 +239,15 @@ def embed(
 
     Args:
         texts: A single string or a list of strings to encode.
-        model: Model ID or alias (``mini``, ``nano``, or any
-            HuggingFace model name). Default: ``mini``.
+        model: Model ID or alias (``mini``, ``nano``, ``mini-full``, ``nano-full``, or any
+            HuggingFace model name). ``mini`` and ``nano`` use LF2 by default.
+            Default: ``mini``.
         dim: If set, truncate embeddings to this dimension via
             Matryoshka truncation. Default: ``None`` (full dimension).
         normalize: Whether to L2-normalize the output vectors.
             Default: ``True``.
+        fast: Use the corresponding native 2-bit LF2 checkpoint when
+            ``model`` is ``mini`` or ``nano``.
 
     Returns:
         A numpy array of shape ``(N, D)`` where ``N`` is the number
@@ -229,8 +261,11 @@ def embed(
         >>> vec = embed(["Indian cricket team is strong", "Chennai is a major city"], model="nano", dim=64)
         >>> vec.shape
         (2, 64)
+        >>> # Use LF2 models (native 2-bit embeddings)
+        >>> vec = embed("Native 2-bit embedding text...", model="mini-lf2")
+
     """
-    model_id = _resolve_model_id(model)
+    model_id = _resolve_model_id(model, fast=fast)
     from vortexa.core.v4_embedder import VortexEmbedderV4
 
     embedder = VortexEmbedderV4(model_id)

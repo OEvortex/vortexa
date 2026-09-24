@@ -87,7 +87,7 @@ class CodebaseIndexer:
         self,
         root: str | Path,
         model: Encoder | Embedder | None = None,
-        model_id: str = "VTXAI/vtx-embed-7M",
+        model_id: str = "VTXAI/vtx-embed-7M-lf2",
         index_dir: str | Path | None = None,
         chunk_config: ChunkConfig | None = None,
     ) -> None:
@@ -113,7 +113,7 @@ class CodebaseIndexer:
                 self._model = model
         else:
             from vortexa.core.v4_embedder import VortexEmbedderV4
-            self._embedder = VortexEmbedderV4(model_id or "VTXAI/vtx-embed-7M")
+            self._embedder = VortexEmbedderV4(model_id or "VTXAI/vtx-embed-7M-lf2")
             self._model = self._embedder
 
         # In-memory state

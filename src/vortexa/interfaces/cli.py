@@ -79,6 +79,14 @@ def _resolve_root(environment_details: str | None, explicit_root: str | None) ->
     return Path.cwd().resolve()
 
 
+def _resolve_model_arg(model_arg: str | None, *, fast: bool = False) -> str | None:
+    if model_arg is None:
+        return None
+    from vortexa.core.inference import _resolve_model_id
+
+    return _resolve_model_id(model_arg, fast=fast)
+
+
 def _format_result(result) -> dict[str, object]:
     out = {
         "file": result.chunk.file_path,
@@ -270,19 +278,7 @@ def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         root = _resolve_root(args.environment_details, args.root)
     except ValueError as exc:
         parser.error(str(exc))
-    _MODEL_ALIASES = {
-        "mini": "VTXAI/vtx-embed-7M",
-        "nano": "VTXAI/vtx-embed-1M",
-    }
-
-    def _resolve_model_id(model_arg: str | None) -> str | None:
-        if model_arg is None:
-            return None
-        if model_arg in _MODEL_ALIASES:
-            return _MODEL_ALIASES[model_arg]
-        return model_arg
-
-    model_id = _resolve_model_id(args.model)
+    model_id = _resolve_model_arg(args.model, fast=bool(getattr(args, "fast", False)))
     indexer = CodebaseIndexer(root=root, model_id=model_id)
 
     has_index = _has_existing_index(root)
@@ -350,15 +346,10 @@ def _make_indexer(args, parser):
         parser.error(str(exc))
         raise SystemExit(2) from exc  # unreachable, satisfies the type checker
 
-    _MODEL_ALIASES = {
-        "mini": "VTXAI/vtx-embed-7M",
-        "nano": "VTXAI/vtx-embed-1M",
-    }
-
-    model_arg = getattr(args, "model", None)
-    if model_arg in _MODEL_ALIASES:
-        model_arg = _MODEL_ALIASES[model_arg]
-
+    model_arg = _resolve_model_arg(
+        getattr(args, "model", None),
+        fast=bool(getattr(args, "fast", False)),
+    )
     indexer = CodebaseIndexer(root=root, model_id=model_arg)
 
     if getattr(args, "no_index", False):
@@ -441,7 +432,13 @@ def _add_common_index_args(p: argparse.ArgumentParser) -> None:
         "--model",
         metavar="ID",
         default=None,
-        help="embedding model ID (default: VTXAI/vtx-embed-7M, alias: mini, nano)",
+        help="embedding model ID (default: mini using LF2; aliases: mini-full, nano-full)",
+    )
+    p.add_argument(
+        "-f",
+        "--fast",
+        action="store_true",
+        help="use the native 2-bit LF2 checkpoint for the mini or nano model",
     )
 
 
@@ -592,6 +589,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument("--no-index", action="store_true")
         parser.add_argument("--plain", action="store_true")
         parser.add_argument("--model", metavar="ID", default=None)
+        parser.add_argument("-f", "--fast", action="store_true")
         args = parser.parse_args(raw_argv)
         return run_query(args, parser)
 
@@ -640,7 +638,13 @@ def _build_embed_parser() -> argparse.ArgumentParser:
         "--model",
         metavar="ID",
         default="mini",
-        help="embedding model ID or alias (mini, nano). Default: mini",
+        help="embedding model ID or alias (mini, nano use LF2 by default; mini-full/nano-full use LF4). Default: mini",
+    )
+    parser.add_argument(
+        "-f",
+        "--fast",
+        action="store_true",
+        help="use the native 2-bit LF2 checkpoint for the mini or nano model",
     )
     return parser
 
@@ -654,7 +658,7 @@ def _run_embed(argv: list[str]) -> int:
 
     from vortexa.core.inference import VortexEmbedInference
 
-    engine = VortexEmbedInference(args.model)
+    engine = VortexEmbedInference(args.model, fast=args.fast)
     vecs = engine.encode(args.texts)
 
     print(json.dumps({
