@@ -48,14 +48,16 @@ _CHUNKING_LOGIC_VERSION = "2"
 _GLOBAL_INDEX_ROOT = Path.home() / ".vortexa"
 
 
-def _index_dir_for_root(root: Path) -> Path:
-    """Derive the global index directory for a given project root.
+def _index_dir_for_root(root: Path, model_id: str | None = None) -> Path:
+    """Derive the global index directory for a project root and embedding model.
 
     Stores under ``~/.vortexa/<hex_hash>/`` where *hex_hash* is the first
-    16 chars of the SHA-256 of the resolved absolute path.  This keeps every
-    indexed project isolated while avoiding path-length issues.
+    16 chars of the SHA-256 of the resolved absolute path plus the model id.
+    The model id is part of the key because vectors from different embedding
+    models are not interchangeable.
     """
-    path_hash = hashlib.sha256(str(root).encode()).hexdigest()[:16]
+    key = str(root) if not model_id else f"{root}\x00{model_id}"
+    path_hash = hashlib.sha256(key.encode()).hexdigest()[:16]
     return _GLOBAL_INDEX_ROOT / path_hash
 
 
@@ -100,7 +102,12 @@ class CodebaseIndexer:
         :param chunk_config: Chunking configuration.
         """
         self.root = Path(root).resolve()
-        self.index_dir = Path(index_dir) if index_dir else _index_dir_for_root(self.root)
+        model_ref = model_id or getattr(model, "model_id", None) or getattr(
+            model, "_model_id", None
+        )
+        self.index_dir = (
+            Path(index_dir) if index_dir else _index_dir_for_root(self.root, model_ref)
+        )
         self.chunk_config = chunk_config or ChunkConfig()
 
         # Resolve model: prefer explicit model, else create VortexEmbedderV4
@@ -112,7 +119,7 @@ class CodebaseIndexer:
                 self._embedder = None
                 self._model = model
         else:
-            from vortexa.core.v4_embedder import VortexEmbedderV4
+            from vortexa.core.model import VortexEmbedderV4
             self._embedder = VortexEmbedderV4(model_id or "VTXAI/vtx-embed-7M-lf2")
             self._model = self._embedder
 

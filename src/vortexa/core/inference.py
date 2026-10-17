@@ -51,6 +51,8 @@ _MODEL_ALIASES = {
     "nano-lf2": "VTXAI/vtx-embed-1M-lf2",
     "mini-full": "VTXAI/vtx-embed-7M",
     "nano-full": "VTXAI/vtx-embed-1M",
+    "jev3": "VTXAI/VTX-JEV-3",
+    "jev2": "VTXAI/VTX-JEV-2",
 }
 _FAST_MODEL_IDS = {
     "mini-full": _MODEL_ALIASES["mini-lf2"],
@@ -136,7 +138,7 @@ class VortexEmbedInference:
         fast: bool = False,
     ) -> None:
         self._model_id = _resolve_model_id(model, fast=fast)
-        from vortexa.core.v4_embedder import VortexEmbedderV4
+        from vortexa.core.model import VortexEmbedderV4
 
         self._embedder = VortexEmbedderV4(self._model_id)
         self._dim = dim
@@ -266,7 +268,7 @@ def embed(
 
     """
     model_id = _resolve_model_id(model, fast=fast)
-    from vortexa.core.v4_embedder import VortexEmbedderV4
+    from vortexa.core.model import VortexEmbedderV4
 
     embedder = VortexEmbedderV4(model_id)
     if isinstance(texts, str):

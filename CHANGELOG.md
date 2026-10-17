@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.6] - 2026-10-17
+
+### Changed
+- Merged `lf2_model.py`, `lf4_v4_model.py`, and `v4_embedder.py` into a single `src/vortexa/core/model.py`.
+- Model loading now prefers the local Hugging Face cache (`local_files_only=True`) before downloading.
+- Adopted sgrep-style retrieval improvements: 2048-char chunks, 75/25 relative-score fusion, top-200 candidates, exact-identifier priority, containment dedup.
+- Removed `sentence-transformers` dependency for a torch-free install.
+- Bumped package version to `0.3.6`.
+
+### Added
+- `scripts/` conversion helpers and benchmark utilities (removed from final tree).
+- Offline-first model loading for all Vortex embedding models.
+
 ## [0.3.5] - 2026-09-24
 
 ### Changed

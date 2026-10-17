@@ -103,7 +103,7 @@ _STOPWORDS = frozenset(
 
 # Alpha auto-detection
 _ALPHA_SYMBOL = 0.3  # lean BM25 for exact keyword matching
-_ALPHA_NL = 0.5  # balanced semantic + BM25
+_ALPHA_NL = 0.75  # sgrep-style 75% semantic
 
 
 def is_symbol_query(query: str) -> bool:

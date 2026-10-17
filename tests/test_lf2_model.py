@@ -52,8 +52,8 @@ def _write_lf2_checkpoint(path: Path) -> None:
 
 
 def test_v4_embedder_selects_lf2_from_config(tmp_path, monkeypatch):
-    from vortexa.core import lf2_model
-    from vortexa.core.v4_embedder import VortexEmbedderV4
+    from vortexa.core import model as lf2_model
+    from vortexa.core.model import VortexEmbedderV4
 
     checkpoint = tmp_path / "lf2"
     _write_lf2_checkpoint(checkpoint)
@@ -69,8 +69,8 @@ def test_v4_embedder_selects_lf2_from_config(tmp_path, monkeypatch):
 
 
 def test_lf2_dequantizes_and_pools_native_codes(tmp_path, monkeypatch):
-    from vortexa.core import lf2_model
-    from vortexa.core.v4_embedder import VortexEmbedderV4
+    from vortexa.core import model as lf2_model
+    from vortexa.core.model import VortexEmbedderV4
 
     checkpoint = tmp_path / "lf2"
     _write_lf2_checkpoint(checkpoint)
@@ -84,7 +84,7 @@ def test_lf2_dequantizes_and_pools_native_codes(tmp_path, monkeypatch):
 
 
 def test_lf2_rejects_non_divisible_embedding_dimension(tmp_path):
-    from vortexa.core.lf2_model import LF2Config, VortexEmbedLF2
+    from vortexa.core.model import LF2Config, VortexEmbedLF2
 
     config = LF2Config(vocab_size=2, embedding_dim=3, block_size=4, num_blocks=1)
     with pytest.raises(ValueError, match="embedding_dim"):
@@ -107,7 +107,7 @@ def test_fast_resolves_mini_and_nano_to_lf2():
     assert _resolve_model_id("mini-full") == "VTXAI/vtx-embed-7M"
     assert _resolve_model_id("nano-full") == "VTXAI/vtx-embed-1M"
 
-    from vortexa.core.v4_embedder import VortexEmbedderV4
+    from vortexa.core.model import VortexEmbedderV4
 
     assert VortexEmbedderV4("mini")._model_id == "VTXAI/vtx-embed-7M-lf2"
     assert VortexEmbedderV4("nano-full")._model_id == "VTXAI/vtx-embed-1M"

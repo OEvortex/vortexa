@@ -26,7 +26,7 @@ from vortexa.core.chunking import chunk_source
 from vortexa.core.embedding import Embedder
 from vortexa.core.graph import RepoGraph, RepoGraphBuilder
 from vortexa.core.language import detect_language, get_extensions
-from vortexa.core.v4_embedder import VortexEmbedderV4
+from vortexa.core.model import VortexEmbedderV4
 from vortexa.core.vortex_score import VortexScoreWeights, vortex_score, tokenize
 
 logger = logging.getLogger(__name__)

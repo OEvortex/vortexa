@@ -333,9 +333,9 @@ def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     return 0
 
 
-def _has_existing_index(root: Path) -> bool:
-    """Check if a persistent index already exists for this root."""
-    index_dir = _index_dir_for_root(root)
+def _has_existing_index(root: Path, model_arg: str | None = None) -> bool:
+    """Check if a persistent index already exists for this root and model."""
+    index_dir = _index_dir_for_root(root, model_arg)
     return (index_dir / "state.lmdb").exists()
 
 
@@ -353,7 +353,7 @@ def _make_indexer(args, parser):
     indexer = CodebaseIndexer(root=root, model_id=model_arg)
 
     if getattr(args, "no_index", False):
-        if not _has_existing_index(root):
+        if not _has_existing_index(root, model_arg):
             raise SystemExit(
                 f"No index found for {root}. Run without --no-index to build one."
             )

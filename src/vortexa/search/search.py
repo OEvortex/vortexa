@@ -32,6 +32,18 @@ def _rrf_scores(scores: dict[Chunk, float]) -> dict[Chunk, float]:
     return {chunk: 1.0 / (_RRF_K + rank) for rank, chunk in enumerate(ranked, 1)}
 
 
+def _relative_scores(scores: dict[Chunk, float]) -> dict[Chunk, float]:
+    """Min-max scale scores to 0-1, matching sgrep's relative_scores."""
+    if not scores:
+        return scores
+    vals = list(scores.values())
+    lo = min(vals)
+    hi = max(vals)
+    if hi > lo:
+        return {c: (scores[c] - lo) / (hi - lo) for c in scores}
+    return {c: 0.0 for c in scores}
+
+
 def _encode_query(model, query: str) -> np.ndarray:
     """Encode a query using either Encoder or Embedder."""
     from vortexa.core.embedding import Embedder
@@ -104,21 +116,22 @@ def search_hybrid(
     """
     alpha_weight = resolve_alpha(query, alpha)
 
-    # Over-fetch candidates so the merged pool is large enough
-    candidate_count = top_k * 5
+    # sgrep-style: top 200 lexical + top 200 semantic candidates.
+    candidate_count = min(200, len(chunks))
+    if candidate_count < top_k:
+        candidate_count = top_k
 
     semantic = search_semantic(query, model, store, chunks, chunk_ids, candidate_count, selector)
     semantic_scores: dict[Chunk, float] = {result.chunk: result.score for result in semantic}
 
-    # Convert selector to set for BM25
     selector_set = set(selector.tolist()) if selector is not None else None
     bm25_results = search_bm25(query, bm25_index, chunks, chunk_ids, candidate_count, selector_set)
     bm25_scores = {result.chunk: result.score for result in bm25_results}
 
-    normalized_semantic = _rrf_scores(semantic_scores)
-    normalized_bm25 = _rrf_scores(bm25_scores)
+    # sgrep relative (min-max) scaling instead of RRF.
+    normalized_semantic = _relative_scores(semantic_scores)
+    normalized_bm25 = _relative_scores(bm25_scores)
 
-    # Sort by file path and start line to counteract randomness from hashing
     all_candidates = sorted(
         {*normalized_semantic, *normalized_bm25},
         key=lambda c: c.start_line,
@@ -129,13 +142,43 @@ def search_hybrid(
         for chunk in all_candidates
     }
 
-    # Boost files with multiple relevant chunks
     boost_multi_chunk_files(combined_scores)
-    # Boost queries with specific identifiers in them
     combined_scores = apply_query_boost(combined_scores, query, chunks)
-    # Rerank the top-k results by applying path-based penalties
-    ranked = rerank_topk(combined_scores, top_k, penalise_paths=alpha_weight < 1.0)
-    return [SearchResult(chunk=chunk, score=score, source=SearchMode.HYBRID) for chunk, score in ranked]
+
+    # Exact identifier priority (sgrep-style): include any chunk containing the
+    # identifier, even if it was not in the top-200 lexical/semantic pool.
+    exact_ids = set()
+    import re as _re
+    idents = []
+    for tok in _re.findall(r"[A-Za-z_][A-Za-z0-9_]*", query):
+        if "_" in tok or any(c.isupper() for c in tok[1:]) or any(c.isdigit() for c in tok):
+            idents.append(tok)
+    if idents:
+        boost = max(combined_scores.values(), default=0.0) + 1.0
+        for chunk in chunks:
+            if any(ident in (chunk.content or "") for ident in idents):
+                exact_ids.add(chunk)
+                if chunk not in combined_scores:
+                    combined_scores[chunk] = boost
+
+    # Rerank with path penalties.
+    ranked = rerank_topk(combined_scores, top_k * 2, penalise_paths=alpha_weight < 1.0)
+
+    # Containment dedup + exact-first ordering.
+    exact_ranked = [(c, s) for c, s in ranked if c in exact_ids]
+    other_ranked = [(c, s) for c, s in ranked if c not in exact_ids]
+    ordered = exact_ranked + other_ranked
+
+    results: list[SearchResult] = []
+    kept: list[Chunk] = []
+    for chunk, score in ordered:
+        if any(k.file_path == chunk.file_path and k.start_line <= chunk.start_line and chunk.end_line <= k.end_line for k in kept):
+            continue
+        kept.append(chunk)
+        results.append(SearchResult(chunk=chunk, score=score, source=SearchMode.HYBRID))
+        if len(results) >= top_k:
+            break
+    return results
 
 
 def search(

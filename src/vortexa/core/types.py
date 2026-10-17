@@ -49,7 +49,7 @@ class Lineage:
 class ChunkConfig:
     """Configuration for code chunking (cocoindex RecursiveSplitter-style)."""
 
-    chunk_size: int = 1500
+    chunk_size: int = 2048
     min_chunk_size: int | None = None  # Defaults to chunk_size // 2
     chunk_overlap: int = 200
     language: str | None = None
