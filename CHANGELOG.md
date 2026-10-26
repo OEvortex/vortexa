@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.7] - 2026-10-26
+
+### Fixed
+- File walker now applies the repository root's `.gitignore` and `.git/info/exclude`
+  when indexing a subdirectory, matching git's ignore semantics. Previously the
+  walker only read ignore files inside the indexed root, so a repo-root
+  `.gitignore` was silently dropped when indexing a subdirectory.
+
 ## [0.3.6] - 2026-10-17
 
 ### Changed
@@ -31,6 +39,10 @@
 ### Added
 - `VortexEmbedInference.similarity()` instance method for computing cosine similarity between
   queries and documents (accepts strings, lists, or pre-encoded arrays)
+
+### Fixed
+- File walker now applies the repository root's `.gitignore` and `.git/info/exclude`
+  when indexing a subdirectory, matching git's ignore semantics.
 
 ## [0.3.0] - Unreleased
 

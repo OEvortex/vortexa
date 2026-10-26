@@ -53,21 +53,77 @@ def _load_ignore_for_dir(directory: Path) -> GitIgnoreSpec | None:
     return None
 
 
+def _find_repo_root(root: Path) -> Path | None:
+    """Walk upward from *root* looking for a directory containing ``.git``.
+
+    Returns the git repository root, or ``None`` when *root* is not inside a
+    git repository.
+    """
+    current = root
+    while True:
+        if (current / ".git").exists():
+            return current
+        if current.parent == current:
+            return None
+        current = current.parent
+
+
+def _ancestor_specs(root: Path, repo_root: Path) -> list[IgnoreSpec]:
+    """Build ignore specs for ignore files between the repo root and *root*.
+
+    Git applies a repository's root ``.gitignore`` to every subdirectory, so
+    indexing a subdirectory must still honour the ancestor ignore patterns.
+    Specs are ordered outermost first: closer-to-root files come later and
+    therefore take precedence, matching git's last-match-wins semantics.
+    """
+    specs: list[IgnoreSpec] = []
+
+    info_exclude = repo_root / ".git" / "info" / "exclude"
+    if info_exclude.is_file():
+        lines = info_exclude.read_text(encoding="utf-8", errors="ignore").splitlines()
+        if lines:
+            specs.append(IgnoreSpec(base=repo_root, spec=GitIgnoreSpec.from_lines(lines)))
+
+    directories: list[Path] = []
+    current = repo_root
+    while current != root:
+        directories.append(current)
+        if current.parent == current:
+            break
+        current = current.parent
+    directories.reverse()
+
+    for directory in directories:
+        spec = _load_ignore_for_dir(directory)
+        if spec is not None:
+            specs.append(IgnoreSpec(base=directory, spec=spec))
+    return specs
+
+
 def walk_files(root: Path, extensions: Sequence[str]) -> Iterator[Path]:
     """Yield files under root matching extensions, skipping ignored paths.
 
     Directories matching DEFAULT_IGNORED_DIRS are always skipped.
     If the root contains a .gitignore, its patterns are also honoured.
+    When *root* sits inside a git repository, the repository root's
+    ``.gitignore`` and ``.git/info/exclude`` apply to it as well, so indexing a
+    subdirectory respects the same ignore rules as git.
 
     :param root: Root directory to walk.
     :param extensions: List of file extensions to match.
     :yield: Path to each file under root matching the criteria.
     """
+    root = root.resolve()
     extensions_set = frozenset(extensions)
     dir_patterns = sorted(_DEFAULT_IGNORED_DIRS)
     base_spec = GitIgnoreSpec.from_lines(dir_patterns, backend="simple")
-    s = IgnoreSpec(base=root, spec=base_spec)
-    yield from _walk(root, [s], extensions_set)
+    specs = [IgnoreSpec(base=root, spec=base_spec)]
+
+    repo_root = _find_repo_root(root)
+    if repo_root is not None:
+        specs.extend(_ancestor_specs(root, repo_root))
+
+    yield from _walk(root, specs, extensions_set)
 
 
 def _is_ignored(path: Path, specs: list[IgnoreSpec]) -> tuple[bool, bool]:
