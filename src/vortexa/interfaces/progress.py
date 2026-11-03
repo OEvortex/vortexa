@@ -69,10 +69,12 @@ class IndexProgressBar:
         enabled: bool = True,
         title: str = "",
         width: int | None = None,
+        compact: bool = False,
     ) -> None:
         self._stream = stream if stream is not None else sys.stderr
         self._enabled = enabled
         self._title = title
+        self._compact = compact
         self._isatty = self._stream_isatty()
         self._color = self._isatty and not os.environ.get("NO_COLOR")
         if width is None:
@@ -147,7 +149,7 @@ class IndexProgressBar:
         if self._header_written or not self._title:
             return
         self._header_written = True
-        title = _truncate(self._title, self._width)
+        title = _truncate(self._title, self._width - 8)
         print(f"[vortexa] {title}", file=self._stream, flush=True)
 
     def _phase_label(self, event: IndexProgress) -> str:
@@ -170,19 +172,24 @@ class IndexProgressBar:
 
         rate, eta = self._phase_rate(event, now)
         status = f"{current}/{total}" if total else "…"
-        right = f"{status:>12}  {percent:3d}%"
-        if rate > 0:
-            right += f"  {rate:5.0f}/s"
+        right = f"{status:>10}  {percent:3d}%"
         if eta is not None:
-            right += f"  ETA {_format_duration(eta)}"
+            right += f"  {_format_duration(eta)} left"
+        elif rate > 0 and not self._compact:
+            right += f"  {rate:4.0f}/s"
 
         left = f"[vortexa] {label}"
-        detail = _truncate(event.detail, 34)
-        if detail:
+        detail = _truncate(event.detail, 24 if self._compact else 36)
+        if detail and total > 0:
+            left += f"  {detail}"
+        elif detail and total == 0 and label not in detail:
             left += f"  {detail}"
 
         bar_width = self._width - len(left) - len(right) - 6
-        bar_width = max(10, min(30, bar_width))
+        if self._compact:
+            bar_width = max(6, min(14, bar_width))
+        else:
+            bar_width = max(10, min(24, bar_width))
         filled = int(bar_width * event.fraction)
         bar = _BAR_CHARS[0] * filled + _BAR_CHARS[1] * (bar_width - filled)
 
@@ -206,9 +213,9 @@ class IndexProgressBar:
     def _finish(self, event: IndexProgress, now: float) -> None:
         self._finished = True
         elapsed = event.elapsed or (now - self._started)
-        message = _truncate(event.message or "Index complete", max(10, self._width - 24))
-        suffix = f" ({_format_duration(elapsed)})"
-        line = f"[vortexa] {self._paint('✓', '32')} {message}{suffix}"
+        message = _truncate(event.message or "done", max(10, self._width - 20))
+        suffix = f" { _format_duration(elapsed) }"
+        line = f"[vortexa] {self._paint('ok', '32')} {message}{suffix}"
         if self._isatty:
             self._stream.write("\r\033[2K" + line + "\n")
         else:

@@ -53,7 +53,7 @@ def _resolve_server_root(root: str | Path | None) -> Path:
 
 
 def _new_progress_bar(root: Path) -> IndexProgressBar:
-    return IndexProgressBar(title=f"Indexing {root}", enabled=_show_progress)
+    return IndexProgressBar(title=f"{root}", enabled=_show_progress, compact=True)
 
 
 def _get_indexer(progress: ProgressCallback | None = None, *, ensure_indexed: bool = True):

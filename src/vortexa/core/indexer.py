@@ -52,6 +52,11 @@ _CHUNKING_LOGIC_VERSION = "2"
 _GLOBAL_INDEX_ROOT = Path.home() / ".vortexa"
 
 
+def global_index_root() -> Path:
+    """Return the directory where all indexes are stored."""
+    return _GLOBAL_INDEX_ROOT
+
+
 def _resolve_model_id(model_id: str | None) -> str:
     """Resolve model aliases to a concrete ID, defaulting to the LF2 mini model."""
     from vortexa.core.inference import resolve_model_id

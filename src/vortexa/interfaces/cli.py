@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from vortexa import __version__
-from vortexa.core.indexer import CodebaseIndexer, _index_dir_for_root
+from vortexa.core.indexer import CodebaseIndexer, _index_dir_for_root, global_index_root
 from vortexa.core.inference import resolve_model_id
 from vortexa.core.types import GraphContext, IndexStats
 from vortexa.interfaces.progress import IndexProgressBar
@@ -265,6 +265,81 @@ def _attach_graph_context(self, results):
     return enriched
 
 
+def cmd_clean(args, parser) -> int:
+    root_dir = global_index_root()
+    if not root_dir.exists():
+        if args.plain:
+            print(f"[vortexa] No indexes found in {root_dir}")
+        else:
+            print(json.dumps({"deleted": 0, "index_root": str(root_dir)}, indent=2))
+        return 0
+
+    entries = [
+        path for path in root_dir.iterdir() if path.is_dir() and path.name != ".DS_Store"
+    ]
+    if not entries:
+        if args.plain:
+            print(f"[vortexa] No indexes found in {root_dir}")
+        else:
+            print(json.dumps({"deleted": 0, "index_root": str(root_dir)}, indent=2))
+        return 0
+
+    if args.dry_run:
+        if args.plain:
+            print(f"[vortexa] Would delete {len(entries)} indexes from {root_dir}")
+            for path in sorted(entries):
+                print(f"  {path.name}")
+        else:
+            print(
+                json.dumps(
+                    {
+                        "dry_run": True,
+                        "index_root": str(root_dir),
+                        "would_delete": [path.name for path in sorted(entries)],
+                    },
+                    indent=2,
+                )
+            )
+        return 0
+
+    if not args.force and sys.stdin.isatty():
+        try:
+            resp = input(f"Delete {len(entries)} indexes from {root_dir}? [y/N] ")
+        except EOFError:
+            resp = ""
+        if resp.strip().lower() not in {"y", "yes"}:
+            print("Aborted", file=sys.stderr)
+            return 1
+
+    import shutil
+
+    deleted = 0
+    failed = []
+    for path in sorted(entries):
+        try:
+            shutil.rmtree(path)
+            deleted += 1
+        except Exception as exc:
+            failed.append({"path": str(path), "error": str(exc)})
+
+    if args.plain:
+        print(f"[vortexa] Deleted {deleted} indexes from {root_dir}")
+        for item in failed:
+            print(f"  failed: {item['path']}: {item['error']}", file=sys.stderr)
+    else:
+        print(
+            json.dumps(
+                {
+                    "deleted": deleted,
+                    "index_root": str(root_dir),
+                    "failed": failed,
+                },
+                indent=2,
+            )
+        )
+    return 1 if failed else 0
+
+
 def _has_existing_index(root: Path, model_arg: str | None = None) -> bool:
     """Check if a persistent index already exists for this root and model."""
     index_dir = _index_dir_for_root(root, _resolve_model_arg(model_arg))
@@ -275,30 +350,25 @@ def _progress_for(args: argparse.Namespace, root: Path) -> IndexProgressBar:
     enabled = not bool(getattr(args, "quiet", False)) and not bool(
         getattr(args, "no_progress", False)
     )
-    return IndexProgressBar(title=f"Indexing {root}", enabled=enabled)
+    return IndexProgressBar(title=f"{root}", enabled=enabled, compact=True)
 
 
 def _print_index_summary(stats: IndexStats, indexer: CodebaseIndexer) -> None:
     if stats.up_to_date:
         print(
-            f"[vortexa] Index up to date: {stats.indexed_files} files, "
+            f"[vortexa] up to date: {stats.indexed_files} files, "
             f"{stats.total_chunks} chunks",
             file=sys.stderr,
         )
         return
     print(
-        f"[vortexa] Index ready: {stats.indexed_files} files, "
-        f"{stats.total_chunks} chunks "
-        f"({stats.memo_hits} reused, {stats.embedded_chunks} embedded) "
-        f"in {stats.index_time_ms / 1000:.2f}s",
+        f"[vortexa] ready: {stats.indexed_files} files, {stats.total_chunks} chunks "
+        f"({stats.memo_hits} reused, {stats.embedded_chunks} embedded) in "
+        f"{stats.index_time_ms / 1000:.2f}s",
         file=sys.stderr,
     )
     if stats.errors:
-        print(
-            f"[vortexa] Warning: {len(stats.errors)} file(s) could not be indexed; "
-            "run with --plain for details",
-            file=sys.stderr,
-        )
+        print(f"[vortexa] {len(stats.errors)} errors", file=sys.stderr)
 
 
 def _stats_payload(stats: IndexStats, indexer: CodebaseIndexer) -> dict[str, object]:
@@ -464,6 +534,34 @@ def _build_subcommand_parser() -> argparse.ArgumentParser:
         dest="subcommand",
         metavar="<command>",
     )
+
+    for name in ("clear", "clean"):
+        p_clean = subparsers.add_parser(
+            name,
+            help="delete old indexes from ~/.vortexa",
+            description="Remove cached indexes from the global index store. "
+                        "Use --all to delete all indexes.",
+        )
+        p_clean.add_argument(
+            "--all",
+            action="store_true",
+            help="delete all indexes",
+        )
+        p_clean.add_argument(
+            "--force",
+            action="store_true",
+            help="delete without confirmation",
+        )
+        p_clean.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="show what would be deleted without removing anything",
+        )
+        p_clean.add_argument(
+            "--plain",
+            action="store_true",
+            help="print human-readable output instead of JSON",
+        )
 
     p_serve = subparsers.add_parser(
         "serve",
@@ -748,6 +846,8 @@ def main(argv: list[str] | None = None) -> int:
         "explain": cmd_explain,
         "index": cmd_index,
         "status": cmd_status,
+        "clean": cmd_clean,
+        "clear": cmd_clean,
         "serve": cmd_serve,
     }.get(args.subcommand)
     if handler is None:
