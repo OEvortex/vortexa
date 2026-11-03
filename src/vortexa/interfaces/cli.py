@@ -265,79 +265,51 @@ def _attach_graph_context(self, results):
     return enriched
 
 
-def cmd_clean(args, parser) -> int:
-    root_dir = global_index_root()
-    if not root_dir.exists():
-        if args.plain:
-            print(f"[vortexa] No indexes found in {root_dir}")
-        else:
-            print(json.dumps({"deleted": 0, "index_root": str(root_dir)}, indent=2))
+def cmd_clear(args, parser) -> int:
+    if not getattr(args, "all", False):
+        parser.error("use --all to delete all indexes")
+    # Find repo root and delete .vortexa there
+    try:
+        root = _resolve_root(getattr(args, "environment_details", None), getattr(args, "root", None))
+    except Exception:
+        root = Path.cwd().resolve()
+    from vortexa.core.indexer import _find_repo_root_for_storage
+    repo_root = _find_repo_root_for_storage(root)
+    index_dir = repo_root / ".vortexa"
+    if not index_dir.exists():
+        print(f"[vortexa] no indexes in {index_dir}")
         return 0
 
-    entries = [
-        path for path in root_dir.iterdir() if path.is_dir() and path.name != ".DS_Store"
-    ]
-    if not entries:
-        if args.plain:
-            print(f"[vortexa] No indexes found in {root_dir}")
-        else:
-            print(json.dumps({"deleted": 0, "index_root": str(root_dir)}, indent=2))
-        return 0
-
+    # Delete everything under .vortexa
     if args.dry_run:
-        if args.plain:
-            print(f"[vortexa] Would delete {len(entries)} indexes from {root_dir}")
-            for path in sorted(entries):
-                print(f"  {path.name}")
-        else:
-            print(
-                json.dumps(
-                    {
-                        "dry_run": True,
-                        "index_root": str(root_dir),
-                        "would_delete": [path.name for path in sorted(entries)],
-                    },
-                    indent=2,
-                )
-            )
+        import os
+        count = 0
+        for rootp, dirs, files in os.walk(index_dir):
+            count += len(files) + len(dirs)
+        print(f"[vortexa] would delete {index_dir}")
         return 0
 
     if not args.force and sys.stdin.isatty():
         try:
-            resp = input(f"Delete {len(entries)} indexes from {root_dir}? [y/N] ")
+            resp = input(f"delete all indexes in {index_dir}? [y/N] ")
         except EOFError:
             resp = ""
         if resp.strip().lower() not in {"y", "yes"}:
-            print("Aborted", file=sys.stderr)
+            print("aborted", file=sys.stderr)
             return 1
 
     import shutil
 
-    deleted = 0
-    failed = []
-    for path in sorted(entries):
-        try:
-            shutil.rmtree(path)
-            deleted += 1
-        except Exception as exc:
-            failed.append({"path": str(path), "error": str(exc)})
+    try:
+        shutil.rmtree(index_dir)
+        print(f"[vortexa] deleted {index_dir}")
+    except Exception as exc:
+        print(f"[vortexa] failed to delete {index_dir}: {exc}", file=sys.stderr)
+        return 1
+    return 0
 
-    if args.plain:
-        print(f"[vortexa] Deleted {deleted} indexes from {root_dir}")
-        for item in failed:
-            print(f"  failed: {item['path']}: {item['error']}", file=sys.stderr)
-    else:
-        print(
-            json.dumps(
-                {
-                    "deleted": deleted,
-                    "index_root": str(root_dir),
-                    "failed": failed,
-                },
-                indent=2,
-            )
-        )
-    return 1 if failed else 0
+
+cmd_clean = cmd_clear
 
 
 def _has_existing_index(root: Path, model_arg: str | None = None) -> bool:
@@ -535,33 +507,29 @@ def _build_subcommand_parser() -> argparse.ArgumentParser:
         metavar="<command>",
     )
 
-    for name in ("clear", "clean"):
-        p_clean = subparsers.add_parser(
-            name,
-            help="delete old indexes from ~/.vortexa",
-            description="Remove cached indexes from the global index store. "
-                        "Use --all to delete all indexes.",
-        )
-        p_clean.add_argument(
-            "--all",
-            action="store_true",
-            help="delete all indexes",
-        )
-        p_clean.add_argument(
-            "--force",
-            action="store_true",
-            help="delete without confirmation",
-        )
-        p_clean.add_argument(
-            "--dry-run",
-            action="store_true",
-            help="show what would be deleted without removing anything",
-        )
-        p_clean.add_argument(
-            "--plain",
-            action="store_true",
-            help="print human-readable output instead of JSON",
-        )
+    p_clean = subparsers.add_parser(
+        "clear",
+        help="delete indexes from .vortexa in repo root",
+        description="Remove cached indexes from <repo>/.vortexa/index. "
+                    "Use --all to delete all indexes.",
+    )
+    p_clean.add_argument("environment_details", nargs="?", help=argparse.SUPPRESS)
+    p_clean.add_argument("--root", help="project root (default: cwd)")
+    p_clean.add_argument(
+        "--all",
+        action="store_true",
+        help="delete all indexes",
+    )
+    p_clean.add_argument(
+        "--force",
+        action="store_true",
+        help="delete without confirmation",
+    )
+    p_clean.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="show what would be deleted without removing anything",
+    )
 
     p_serve = subparsers.add_parser(
         "serve",
@@ -846,8 +814,7 @@ def main(argv: list[str] | None = None) -> int:
         "explain": cmd_explain,
         "index": cmd_index,
         "status": cmd_status,
-        "clean": cmd_clean,
-        "clear": cmd_clean,
+        "clear": cmd_clear,
         "serve": cmd_serve,
     }.get(args.subcommand)
     if handler is None:

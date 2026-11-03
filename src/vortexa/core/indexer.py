@@ -64,19 +64,23 @@ def _resolve_model_id(model_id: str | None) -> str:
     return resolve_model_id(model_id or _DEFAULT_MODEL_ID)
 
 
-def _index_dir_for_root(root: Path, model_id: str | None = None) -> Path:
-    """Derive the global index directory for a project root and embedding model.
+def _find_repo_root_for_storage(root: Path) -> Path:
+    """Find git repo root or fall back to the given root."""
+    from vortexa.storage.walker import _find_repo_root
 
-    Stores under ``~/.vortexa/<hex_hash>/`` where *hex_hash* is the first
-    16 chars of the SHA-256 of the resolved absolute path plus the resolved
-    model id. The model id is part of the key because vectors from different
-    embedding models are not interchangeable.
+    repo_root = _find_repo_root(root)
+    return repo_root if repo_root is not None else root.resolve()
+
+
+def _index_dir_for_root(root: Path, model_id: str | None = None) -> Path:
+    """Derive the index directory for a project/repo root.
+
+    Stores under ``<repo_root>/.vortexa/index/<model_id>/`` in a modular layout.
     """
-    resolved_root = Path(root).resolve()
+    resolved_root = _find_repo_root_for_storage(Path(root))
     resolved_model = _resolve_model_id(model_id)
-    key = f"{resolved_root}\x00{resolved_model}"
-    path_hash = hashlib.sha256(key.encode()).hexdigest()[:16]
-    return _GLOBAL_INDEX_ROOT / path_hash
+    safe_model = resolved_model.replace("/", "_").replace(":", "_")
+    return resolved_root / ".vortexa" / "index" / safe_model
 
 
 def _file_hash(path: Path) -> str:
@@ -1178,9 +1182,27 @@ class CodebaseIndexer:
         if not self._state_loaded:
             self._load_state()
 
+    def _ensure_gitignore(self) -> None:
+        """Auto-add .vortexa to .gitignore if it exists."""
+        try:
+            repo_root = _find_repo_root_for_storage(self.root)
+            gitignore = repo_root / ".gitignore"
+            if gitignore.exists():
+                content = gitignore.read_text(encoding="utf-8", errors="ignore")
+                if ".vortexa" not in content:
+                    with gitignore.open("a", encoding="utf-8") as f:
+                        if content and not content.endswith("\n"):
+                            f.write("\n")
+                        f.write(".vortexa/\n")
+            elif (repo_root / ".git").exists():
+                gitignore.write_text(".vortexa/\n", encoding="utf-8")
+        except Exception:
+            pass
+
     def _save_state(self) -> None:
         """Persist index state to LMDB."""
         self.index_dir.mkdir(parents=True, exist_ok=True)
+        self._ensure_gitignore()
         lmdb_path = self.index_dir / "state.lmdb"
         env = lmdb.open(str(lmdb_path), map_size=256 * 1024 * 1024, max_dbs=10)
         try:

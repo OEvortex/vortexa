@@ -152,8 +152,8 @@ def test_index_directory_isolates_models(tmp_path):
     jev = _index_dir_for_root(root, "VTXAI/VTX-JEV-3")
 
     assert mini != jev
-    # None means "use the default mini model", so it must resolve to the same
-    # directory as the explicit model id (the CLI passes None by default).
     assert _index_dir_for_root(root, None) == mini
     assert _index_dir_for_root(root, "mini") == mini
     assert _index_dir_for_root(root, "VTXAI/vtx-embed-7M-lf2") == mini
+    assert mini == root / ".vortexa" / "index" / "VTXAI_vtx-embed-7M-lf2"
+    assert jev == root / ".vortexa" / "index" / "VTXAI_VTX-JEV-3"
