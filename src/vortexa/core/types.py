@@ -92,10 +92,15 @@ class IndexStats:
 
     indexed_files: int = 0
     total_chunks: int = 0
-    languages: dict[str, int] = field(default_factory=dict)
-    memo_hits: int = 0  # Chunks skipped due to memoization
-    memo_misses: int = 0  # Chunks re-embedded
+    languages: dict[str, int] = field(default_factory=dict)  # files per language
+    memo_hits: int = 0  # Chunks that reused an existing vector
+    memo_misses: int = 0  # Chunks that needed embedding
     index_time_ms: float = 0  # Elapsed wall-clock time for the index run
+    changed_files: int = 0  # Files added or modified in this run
+    removed_files: int = 0  # Files deleted in this run
+    embedded_chunks: int = 0  # Chunks actually embedded in this run
+    up_to_date: bool = False  # True when the run found no changes
+    errors: tuple[str, ...] = ()  # Non-fatal per-file read/chunk errors
 
 
 @dataclass(frozen=True, slots=True)

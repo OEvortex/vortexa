@@ -70,6 +70,10 @@ class VectorStore:
     def get_id(self, idx: int) -> str | None:
         return self._idx_to_id.get(idx)
 
+    def has_id(self, chunk_id: str) -> bool:
+        """Return True when a vector exists for *chunk_id*."""
+        return chunk_id in self._id_to_idx
+
     def get_vector(self, chunk_id: str) -> npt.NDArray[np.float32] | None:
         idx = self._id_to_idx.get(chunk_id)
         if idx is None:

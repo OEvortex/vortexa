@@ -62,10 +62,15 @@ _FAST_MODEL_IDS = {
 }
 
 
-def _resolve_model_id(model: str, *, fast: bool = False) -> str:
+def resolve_model_id(model: str, *, fast: bool = False) -> str:
+    """Resolve a model alias (``mini``, ``nano``, ...) to a concrete model ID."""
     if fast and model in _FAST_MODEL_IDS:
         return _FAST_MODEL_IDS[model]
     return _MODEL_ALIASES.get(model, model)
+
+
+# Backwards-compatible private alias.
+_resolve_model_id = resolve_model_id
 
 
 def similarity(

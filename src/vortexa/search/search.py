@@ -41,7 +41,10 @@ def _relative_scores(scores: dict[Chunk, float]) -> dict[Chunk, float]:
     hi = max(vals)
     if hi > lo:
         return {c: (scores[c] - lo) / (hi - lo) for c in scores}
-    return {c: 0.0 for c in scores}
+    # A single candidate (or a tie) should not be discarded just because
+    # min-max scaling is undefined; keep it only when it has a real score.
+    value = 1.0 if hi > 0 else 0.0
+    return {c: value for c in scores}
 
 
 def _encode_query(model, query: str) -> np.ndarray:
@@ -172,6 +175,8 @@ def search_hybrid(
     results: list[SearchResult] = []
     kept: list[Chunk] = []
     for chunk, score in ordered:
+        if not np.isfinite(score) or score <= 0:
+            continue
         if any(k.file_path == chunk.file_path and k.start_line <= chunk.start_line and chunk.end_line <= k.end_line for k in kept):
             continue
         kept.append(chunk)

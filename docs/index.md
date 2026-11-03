@@ -53,7 +53,18 @@ indexer.index()
 results = indexer.search("authentication middleware")
 
 for r in results[:5]:
-    print(f"{r.file_path}:{r.chunk.start_line} score={r.score:.4f}")
+    print(f"{r.chunk.file_path}:{r.chunk.start_line} score={r.score:.4f}")
+```
+
+Pass a progress callback to render your own indexing UI:
+
+```python
+from vortexa.core.progress import IndexProgress
+
+def report(event: IndexProgress) -> None:
+    print(f"{event.phase}: {event.current}/{event.total} {event.message}")
+
+indexer.index(progress=report)
 ```
 
 ### Python — Inference (Embedding)

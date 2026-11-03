@@ -4,14 +4,16 @@ from __future__ import annotations
 
 import argparse
 import json
-import logging
 import sys
 from pathlib import Path
 
+from vortexa import __version__
 from vortexa.core.indexer import CodebaseIndexer, _index_dir_for_root
-from vortexa.core.types import GraphContext
+from vortexa.core.inference import resolve_model_id
+from vortexa.core.types import GraphContext, IndexStats
+from vortexa.interfaces.progress import IndexProgressBar
 
-logger = logging.getLogger(__name__)
+_DEFAULT_MODEL = "mini"
 
 
 def _json_path_from_text(text: str) -> str | None:
@@ -79,18 +81,15 @@ def _resolve_root(environment_details: str | None, explicit_root: str | None) ->
     return Path.cwd().resolve()
 
 
-def _resolve_model_arg(model_arg: str | None, *, fast: bool = False) -> str | None:
-    if model_arg is None:
-        return None
-    from vortexa.core.inference import _resolve_model_id
-
-    return _resolve_model_id(model_arg, fast=fast)
+def _resolve_model_arg(model_arg: str | None, *, fast: bool = False) -> str:
+    return resolve_model_id(model_arg or _DEFAULT_MODEL, fast=fast)
 
 
 def _format_result(result) -> dict[str, object]:
     out = {
         "file": result.chunk.file_path,
         "lines": f"{result.chunk.start_line}-{result.chunk.end_line}",
+        "language": result.chunk.language,
         "score": round(result.score, 4),
         "source": result.source.value,
         "content": result.chunk.content[:500],
@@ -266,6 +265,114 @@ def _attach_graph_context(self, results):
     return enriched
 
 
+def _has_existing_index(root: Path, model_arg: str | None = None) -> bool:
+    """Check if a persistent index already exists for this root and model."""
+    index_dir = _index_dir_for_root(root, _resolve_model_arg(model_arg))
+    return (index_dir / "state.lmdb").exists() and (index_dir / "vectors.npy").exists()
+
+
+def _progress_for(args: argparse.Namespace, root: Path) -> IndexProgressBar:
+    enabled = not bool(getattr(args, "quiet", False)) and not bool(
+        getattr(args, "no_progress", False)
+    )
+    return IndexProgressBar(title=f"Indexing {root}", enabled=enabled)
+
+
+def _print_index_summary(stats: IndexStats, indexer: CodebaseIndexer) -> None:
+    if stats.up_to_date:
+        print(
+            f"[vortexa] Index up to date: {stats.indexed_files} files, "
+            f"{stats.total_chunks} chunks",
+            file=sys.stderr,
+        )
+        return
+    print(
+        f"[vortexa] Index ready: {stats.indexed_files} files, "
+        f"{stats.total_chunks} chunks "
+        f"({stats.memo_hits} reused, {stats.embedded_chunks} embedded) "
+        f"in {stats.index_time_ms / 1000:.2f}s",
+        file=sys.stderr,
+    )
+    if stats.errors:
+        print(
+            f"[vortexa] Warning: {len(stats.errors)} file(s) could not be indexed; "
+            "run with --plain for details",
+            file=sys.stderr,
+        )
+
+
+def _stats_payload(stats: IndexStats, indexer: CodebaseIndexer) -> dict[str, object]:
+    return {
+        "root": str(indexer.root),
+        "index_dir": str(indexer.index_dir),
+        "model": indexer.model_id,
+        "indexed_files": stats.indexed_files,
+        "total_chunks": stats.total_chunks,
+        "languages": stats.languages,
+        "changed_files": stats.changed_files,
+        "removed_files": stats.removed_files,
+        "memo_hits": stats.memo_hits,
+        "memo_misses": stats.memo_misses,
+        "embedded_chunks": stats.embedded_chunks,
+        "up_to_date": stats.up_to_date,
+        "index_time_ms": stats.index_time_ms,
+        "errors": list(stats.errors),
+    }
+
+
+def _prepare_indexer(
+    args: argparse.Namespace,
+    parser: argparse.ArgumentParser,
+    *,
+    announce: bool = True,
+) -> tuple[CodebaseIndexer, IndexStats | None]:
+    try:
+        root = _resolve_root(
+            getattr(args, "environment_details", None),
+            getattr(args, "root", None),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
+        raise SystemExit(2) from exc  # unreachable, satisfies the type checker
+
+    model_id = _resolve_model_arg(
+        getattr(args, "model", None),
+        fast=bool(getattr(args, "fast", False)),
+    )
+    indexer = CodebaseIndexer(root=root, model_id=model_id)
+    quiet = bool(getattr(args, "quiet", False))
+    include_text = bool(getattr(args, "include_text", False))
+
+    if getattr(args, "no_index", False):
+        if not indexer.index_exists:
+            raise SystemExit(
+                f"No index found for {root}. Run without --no-index to build one."
+            )
+        if not indexer.load():
+            raise SystemExit(
+                f"Index for {root} could not be loaded. "
+                "Re-run without --no-index to rebuild it."
+            )
+        if not quiet:
+            print(
+                f"[vortexa] Loaded existing index ({len(indexer.chunks)} chunks)",
+                file=sys.stderr,
+            )
+        return indexer, None
+
+    force = bool(getattr(args, "force", False))
+    show_progress = not quiet and not bool(getattr(args, "no_progress", False))
+    stats = indexer.index(
+        force=force,
+        include_text_files=include_text,
+        progress=_progress_for(args, root),
+    )
+    # The progress bar prints its own completion summary; avoid duplicating it.
+    if announce and not quiet and not show_progress:
+        _print_index_summary(stats, indexer)
+    return indexer, stats
+
+
 def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if not args.query:
         raise SystemExit("query is required when using -q/--query")
@@ -274,128 +381,18 @@ def run_query(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
     if args.alpha is not None and not 0.0 <= args.alpha <= 1.0:
         raise SystemExit("--alpha must be between 0.0 and 1.0")
 
-    try:
-        root = _resolve_root(args.environment_details, args.root)
-    except ValueError as exc:
-        parser.error(str(exc))
-    model_id = _resolve_model_arg(args.model, fast=bool(getattr(args, "fast", False)))
-    indexer = CodebaseIndexer(root=root, model_id=model_id)
-
-    has_index = _has_existing_index(root)
-
-    if args.no_index:
-        if not has_index:
-            raise SystemExit(
-                f"No index found for {root}. Run without --no-index to build one."
-            )
-        indexer._load_state()
-        print(f"[vortexa] Loaded existing index ({len(indexer.chunks)} chunks)", file=sys.stderr)
-    elif args.force:
-        stats = indexer.index(force=True, include_text_files=args.include_text)
-        print(
-            f"[vortexa] Re-indexed: {stats.indexed_files} files, "
-            f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
-            file=sys.stderr,
-        )
-    else:
-        if not has_index:
-            stats = indexer.index(include_text_files=args.include_text)
-            print(
-                f"[vortexa] Indexed: {stats.indexed_files} files, "
-                f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
-                file=sys.stderr,
-            )
-        else:
-            indexer._load_state()
-            before = len(indexer.chunks)
-            stats = indexer.index(include_text_files=args.include_text)
-            after = len(indexer.chunks)
-            if after == before and stats.memo_misses == 0:
-                print(
-                    f"[vortexa] Index up to date ({after} chunks, no changes)",
-                    file=sys.stderr,
-                )
-            else:
-                added = after - before
-                label = f"+{added} chunks" if added else f"{stats.memo_misses} updated"
-                print(
-                    f"[vortexa] Updated: {stats.indexed_files} files, "
-                    f"{after} chunks ({label}) in {stats.index_time_ms:.0f}ms",
-                    file=sys.stderr,
-                )
-
-    query = args.query
-    results = indexer.search(query, top_k=args.top_k, alpha=args.alpha)
+    indexer, _ = _prepare_indexer(args, parser)
+    results = indexer.search(
+        args.query,
+        top_k=args.top_k,
+        alpha=args.alpha,
+        min_score=float(getattr(args, "min_score", 0.0)),
+    )
     if args.plain:
         _print_plain(results)
     else:
         print(json.dumps([_format_result(result) for result in results], indent=2))
     return 0
-
-
-def _has_existing_index(root: Path, model_arg: str | None = None) -> bool:
-    """Check if a persistent index already exists for this root and model."""
-    index_dir = _index_dir_for_root(root, model_arg)
-    return (index_dir / "state.lmdb").exists()
-
-
-def _make_indexer(args, parser):
-    try:
-        root = _resolve_root(args.environment_details, args.root)
-    except ValueError as exc:
-        parser.error(str(exc))
-        raise SystemExit(2) from exc  # unreachable, satisfies the type checker
-
-    model_arg = _resolve_model_arg(
-        getattr(args, "model", None),
-        fast=bool(getattr(args, "fast", False)),
-    )
-    indexer = CodebaseIndexer(root=root, model_id=model_arg)
-
-    if getattr(args, "no_index", False):
-        if not _has_existing_index(root, model_arg):
-            raise SystemExit(
-                f"No index found for {root}. Run without --no-index to build one."
-            )
-        indexer._load_state()
-        print(f"[vortexa] Loaded existing index ({len(indexer.chunks)} chunks)", file=sys.stderr)
-    else:
-        include_text = bool(getattr(args, "include_text", False))
-        force = bool(getattr(args, "force", False))
-        if force:
-            stats = indexer.index(force=True, include_text_files=include_text)
-            print(
-                f"[vortexa] Re-indexed: {stats.indexed_files} files, "
-                f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
-                file=sys.stderr,
-            )
-        elif _has_existing_index(root):
-            indexer._load_state()
-            before = len(indexer.chunks)
-            stats = indexer.index(include_text_files=include_text)
-            after = len(indexer.chunks)
-            if after == before and stats.memo_misses == 0:
-                print(
-                    f"[vortexa] Index up to date ({after} chunks, no changes)",
-                    file=sys.stderr,
-                )
-            else:
-                added = after - before
-                label = f"+{added} chunks" if added else f"{stats.memo_misses} updated"
-                print(
-                    f"[vortexa] Updated: {stats.indexed_files} files, "
-                    f"{after} chunks ({label}) in {stats.index_time_ms:.0f}ms",
-                    file=sys.stderr,
-                )
-        else:
-            stats = indexer.index(include_text_files=include_text)
-            print(
-                f"[vortexa] Indexed: {stats.indexed_files} files, "
-                f"{stats.total_chunks} chunks in {stats.index_time_ms:.0f}ms",
-                file=sys.stderr,
-            )
-
-    return indexer
 
 
 def _add_common_index_args(p: argparse.ArgumentParser) -> None:
@@ -421,7 +418,17 @@ def _add_common_index_args(p: argparse.ArgumentParser) -> None:
     p.add_argument(
         "--no-index",
         action="store_true",
-        help="skip indexing and search the existing index only",
+        help="skip indexing and use the existing index only",
+    )
+    p.add_argument(
+        "--quiet",
+        action="store_true",
+        help="suppress progress and index status messages on stderr",
+    )
+    p.add_argument(
+        "--no-progress",
+        action="store_true",
+        help="hide the realtime indexing progress bar",
     )
     p.add_argument(
         "--plain",
@@ -447,16 +454,75 @@ def _build_subcommand_parser() -> argparse.ArgumentParser:
         prog="vortexa",
         description="Codebase indexing and semantic search engine.",
     )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     subparsers = parser.add_subparsers(
         title="subcommands",
         dest="subcommand",
         metavar="<command>",
     )
 
-    subparsers.add_parser(
+    p_serve = subparsers.add_parser(
         "serve",
         help="start the MCP server on stdio (default when no args)",
+        description="Index a repository and serve the search/resolve/explain "
+                    "tools over the MCP stdio transport.",
     )
+    p_serve.add_argument("environment_details", nargs="?", help=argparse.SUPPRESS)
+    p_serve.add_argument("--root", help="codebase root to serve (default: cwd)")
+    p_serve.add_argument("--include-text", action="store_true",
+                         help="include Markdown, JSON, YAML, and similar files")
+    p_serve.add_argument("--no-watch", action="store_true",
+                         help="disable automatic re-indexing when files change")
+    p_serve.add_argument("--quiet", action="store_true",
+                         help="suppress index status messages on stderr")
+    p_serve.add_argument("--no-progress", action="store_true",
+                         help="hide the realtime indexing progress bar")
+    p_serve.add_argument("--model", metavar="ID", default=None,
+                         help="embedding model ID (default: mini)")
+    p_serve.add_argument("-f", "--fast", action="store_true",
+                         help="use the native 2-bit LF2 checkpoint")
+
+    p_index = subparsers.add_parser(
+        "index",
+        help="build or update the index and print statistics",
+        description="Build or incrementally update the persistent search index. "
+                    "Shows a realtime progress bar on stderr and prints JSON stats.",
+    )
+    p_index.add_argument("environment_details", nargs="?", help=argparse.SUPPRESS)
+    p_index.add_argument("--root", help="codebase root to index (default: cwd)")
+    p_index.add_argument("--include-text", action="store_true",
+                         help="include Markdown, JSON, YAML, and similar files")
+    p_index.add_argument("--force", action="store_true",
+                         help="rebuild the index from scratch")
+    p_index.add_argument("--quiet", action="store_true",
+                         help="suppress progress and status messages on stderr")
+    p_index.add_argument("--no-progress", action="store_true",
+                         help="hide the realtime indexing progress bar")
+    p_index.add_argument("--plain", action="store_true",
+                         help="print human-readable output instead of JSON")
+    p_index.add_argument("--model", metavar="ID", default=None,
+                         help="embedding model ID (default: mini)")
+    p_index.add_argument("-f", "--fast", action="store_true",
+                         help="use the native 2-bit LF2 checkpoint")
+
+    p_status = subparsers.add_parser(
+        "status",
+        help="report whether the index exists and how large it is",
+        description="Print a machine-readable snapshot of the index without "
+                    "building or changing it.",
+    )
+    p_status.add_argument("environment_details", nargs="?", help=argparse.SUPPRESS)
+    p_status.add_argument("--root", help="codebase root to inspect (default: cwd)")
+    p_status.add_argument("--plain", action="store_true",
+                          help="print human-readable output instead of JSON")
+    p_status.add_argument("--model", metavar="ID", default=None,
+                          help="embedding model ID (default: mini)")
+    p_status.add_argument("-f", "--fast", action="store_true",
+                          help="use the native 2-bit LF2 checkpoint")
 
     p_search = subparsers.add_parser(
         "search",
@@ -469,6 +535,8 @@ def _build_subcommand_parser() -> argparse.ArgumentParser:
                           help="maximum results (default: 10)")
     p_search.add_argument("--alpha", type=float, default=None,
                           help="semantic weight 0.0–1.0 (default: adaptive)")
+    p_search.add_argument("--min-score", type=float, default=0.0,
+                          help="drop results below this score (default: 0.0)")
     p_search.add_argument("--hybrid", action="store_true",
                           help="enrich each result with query-aware graph context")
     _add_common_index_args(p_search)
@@ -503,7 +571,61 @@ def _build_subcommand_parser() -> argparse.ArgumentParser:
 
 def cmd_serve(args, parser) -> int:
     from vortexa.interfaces.mcp_server import run_server
-    run_server()
+
+    try:
+        root = _resolve_root(getattr(args, "environment_details", None), args.root)
+    except ValueError as exc:
+        parser.error(str(exc))
+        raise SystemExit(2) from exc
+    run_server(
+        root=root,
+        model_id=_resolve_model_arg(args.model, fast=bool(getattr(args, "fast", False))),
+        include_text=bool(args.include_text),
+        watch=not bool(args.no_watch),
+        show_progress=not bool(args.quiet) and not bool(args.no_progress),
+    )
+    return 0
+
+
+def cmd_index(args, parser) -> int:
+    indexer, stats = _prepare_indexer(args, parser, announce=False)
+    if stats is None:  # pragma: no cover - index command never uses --no-index
+        parser.error("internal error: index command did not build an index")
+    if args.plain:
+        _print_index_summary(stats, indexer)
+        for error in stats.errors:
+            print(f"  error: {error}")
+    else:
+        print(json.dumps(_stats_payload(stats, indexer), indent=2))
+    return 0
+
+
+def cmd_status(args, parser) -> int:
+    try:
+        root = _resolve_root(getattr(args, "environment_details", None), args.root)
+    except ValueError as exc:
+        parser.error(str(exc))
+        raise SystemExit(2) from exc
+    model_id = _resolve_model_arg(args.model, fast=bool(getattr(args, "fast", False)))
+    indexer = CodebaseIndexer(root=root, model_id=model_id)
+    payload = {"version": __version__, **indexer.status()}
+    if args.plain:
+        print(f"status: {payload['status']}")
+        print(f"root: {payload['root']}")
+        print(f"model: {payload['model']}")
+        print(f"index_dir: {payload['index_dir']}")
+        print(f"files: {payload['indexed_files']}")
+        print(f"chunks: {payload['total_chunks']}")
+        if payload["languages"]:
+            languages = ", ".join(
+                f"{name}={count}" for name, count in sorted(payload["languages"].items())
+            )
+            print(f"languages: {languages}")
+        print(f"last_indexed_at: {payload['last_indexed_at'] or 'never'}")
+        if payload["last_index_error"]:
+            print(f"last_index_error: {payload['last_index_error']}")
+    else:
+        print(json.dumps(payload, indent=2))
     return 0
 
 
@@ -514,9 +636,16 @@ def cmd_search(args, parser) -> int:
         parser.error("--top-k must be greater than 0")
     if args.alpha is not None and not 0.0 <= args.alpha <= 1.0:
         parser.error("--alpha must be between 0.0 and 1.0")
+    if args.min_score < 0:
+        parser.error("--min-score must be zero or greater")
 
-    indexer = _make_indexer(args, parser)
-    results = indexer.search(args.query, top_k=args.top_k, alpha=args.alpha)
+    indexer, _ = _prepare_indexer(args, parser)
+    results = indexer.search(
+        args.query,
+        top_k=args.top_k,
+        alpha=args.alpha,
+        min_score=args.min_score,
+    )
     if getattr(args, "hybrid", False):
         results = _attach_graph_context(indexer, results)
 
@@ -533,7 +662,7 @@ def cmd_resolve(args, parser) -> int:
     if args.top_k <= 0:
         parser.error("--top-k must be greater than 0")
 
-    indexer = _make_indexer(args, parser)
+    indexer, _ = _prepare_indexer(args, parser)
     pack = indexer.resolve(args.query, top_k=args.top_k)
     formatted = indexer.format_context(pack)
 
@@ -550,7 +679,7 @@ def cmd_explain(args, parser) -> int:
     if not args.location:
         parser.error("location is required for `explain`")
 
-    indexer = _make_indexer(args, parser)
+    indexer, _ = _prepare_indexer(args, parser)
     pack = indexer.explain(args.location)
     formatted = indexer.format_context(pack)
 
@@ -575,6 +704,11 @@ def main(argv: list[str] | None = None) -> int:
             prog="vortexa",
             description="Codebase indexing and semantic search engine.",
         )
+        parser.add_argument(
+            "--version",
+            action="version",
+            version=f"%(prog)s {__version__}",
+        )
         parser.add_argument("-q", "--query", metavar="TEXT", help="search query; quote multi-word queries")
         parser.add_argument(
             "environment_details",
@@ -584,9 +718,12 @@ def main(argv: list[str] | None = None) -> int:
         parser.add_argument("--root", help="codebase root to index and search; overrides environment_details")
         parser.add_argument("--top-k", type=int, default=10)
         parser.add_argument("--alpha", type=float, default=None)
+        parser.add_argument("--min-score", type=float, default=0.0)
         parser.add_argument("--include-text", action="store_true")
         parser.add_argument("--force", action="store_true")
         parser.add_argument("--no-index", action="store_true")
+        parser.add_argument("--quiet", action="store_true")
+        parser.add_argument("--no-progress", action="store_true")
         parser.add_argument("--plain", action="store_true")
         parser.add_argument("--model", metavar="ID", default=None)
         parser.add_argument("-f", "--fast", action="store_true")
@@ -595,18 +732,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if not raw_argv:
         from vortexa.interfaces.mcp_server import run_server
+
         run_server()
         return 0
 
     parser = _build_subcommand_parser()
-
-    if raw_argv[0] == "serve":
-        if raw_argv in (["serve", "-h"], ["serve", "--help"]):
-            print("usage: vortexa serve\n\nstart the MCP server")
-            return 0
-        from vortexa.interfaces.mcp_server import run_server
-        run_server()
-        return 0
 
     if raw_argv[0] == "embed":
         return _run_embed(raw_argv[1:])
@@ -616,6 +746,8 @@ def main(argv: list[str] | None = None) -> int:
         "search": cmd_search,
         "resolve": cmd_resolve,
         "explain": cmd_explain,
+        "index": cmd_index,
+        "status": cmd_status,
         "serve": cmd_serve,
     }.get(args.subcommand)
     if handler is None:
@@ -641,6 +773,19 @@ def _build_embed_parser() -> argparse.ArgumentParser:
         help="embedding model ID or alias (mini, nano use LF2 by default; mini-full/nano-full use LF4). Default: mini",
     )
     parser.add_argument(
+        "--dim",
+        type=int,
+        default=None,
+        help="Matryoshka truncation dimension (e.g. 64 or 128)",
+    )
+    parser.add_argument(
+        "-F",
+        "--file",
+        metavar="PATH",
+        default=None,
+        help="read one text string per line from PATH (use '-' for stdin)",
+    )
+    parser.add_argument(
         "-f",
         "--fast",
         action="store_true",
@@ -653,18 +798,32 @@ def _run_embed(argv: list[str]) -> int:
     parser = _build_embed_parser()
     args = parser.parse_args(argv)
 
-    if not args.texts:
-        raise SystemExit("at least one text string is required for embedding")
+    texts = list(args.texts)
+    if args.file:
+        if args.file == "-":
+            texts.extend(line.rstrip("\n") for line in sys.stdin if line.strip())
+        else:
+            path = Path(args.file).expanduser()
+            if not path.is_file():
+                parser.error(f"file not found: {path}")
+            texts.extend(
+                line.rstrip("\n")
+                for line in path.read_text(encoding="utf-8", errors="replace").splitlines()
+                if line.strip()
+            )
+
+    if not texts:
+        parser.error("provide at least one text string or use --file PATH")
 
     from vortexa.core.inference import VortexEmbedInference
 
-    engine = VortexEmbedInference(args.model, fast=args.fast)
-    vecs = engine.encode(args.texts)
+    engine = VortexEmbedInference(args.model, fast=args.fast, dim=args.dim)
+    vecs = engine.encode(texts)
 
     print(json.dumps({
         "model": engine.model_id,
-        "dim": engine.dim,
-        "count": len(args.texts),
+        "dim": int(vecs.shape[1]),
+        "count": len(texts),
         "embeddings": [v.tolist() for v in vecs],
     }, indent=2))
     return 0

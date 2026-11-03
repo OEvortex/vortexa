@@ -186,9 +186,6 @@ def chunk_source(
     if chunk_boundaries is None:
         chunk_boundaries = chunk_lines(source, config.chunk_size, config.chunk_overlap)
 
-    # Compute source hash for memoization
-    source_hash = hashlib.sha256(source.encode("utf-8")).hexdigest()[:16]
-
     chunks: list[Chunk] = []
     for boundary in chunk_boundaries:
         end_index = max(boundary.end - 1, boundary.start)
@@ -199,10 +196,9 @@ def chunk_source(
         start_line = source[: boundary.start].count("\n") + 1
         end_line = source[:end_index].count("\n") + 1
 
-        # Compute chunk-specific hash for memoization
-        chunk_hash = hashlib.sha256(
-            f"{file_path}:{source_hash}:{boundary.start}:{boundary.end}".encode()
-        ).hexdigest()[:16]
+        # Content-only hash: unchanged code can reuse its vector even when
+        # line numbers move or the chunk is copied to another file.
+        chunk_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
         # Compute byte offsets for lineage
         as_bytes = source.encode("utf-8")

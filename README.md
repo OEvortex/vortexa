@@ -25,6 +25,7 @@ _Dense + sparse hybrid retrieval · AST-aware chunking · LMDB persistence · MC
   - [Searching](#searching)
   - [Watch Mode](#watch-mode)
   - [Management](#management)
+- [CLI Indexing and Status](#cli-indexing-and-status)
 - [CLI Search](#cli-search)
 - [MCP Server](#mcp-server)
   - [Usage with Claude Code / Cursor](#usage-with-claude-code--cursor)
@@ -88,11 +89,15 @@ vortexa can run as a **standalone Python library**, be embedded into any agent, 
 </tr>
 <tr>
 <td><strong>Live watch mode</strong></td>
-<td>Background thread polls for file changes and auto-re-indexes with configurable debounce.</td>
+<td>Background thread polls for file changes and auto-re-indexes with configurable debounce. The watcher uses the same extension set as the index, so it never loops on files it does not index.</td>
+</tr>
+<tr>
+<td><strong>Realtime progress</strong></td>
+<td>A live progress bar reports file scanning, chunking, model loading, embedding, keyword indexing, and saving — on stderr, so JSON and MCP output stay clean.</td>
 </tr>
 <tr>
 <td><strong>MCP server</strong></td>
-<td>Expose <code>search</code>, <code>resolve</code>, and <code>explain</code> tools for MCP-compatible agents (Claude Code, Cursor, etc.)</td>
+<td>Expose <code>search</code>, <code>resolve</code>, <code>explain</code>, <code>status</code>, and <code>reindex</code> tools for MCP-compatible agents (Claude Code, Cursor, etc.)</td>
 </tr>
 <tr>
 <td><strong>Zero mandatory heavy deps</strong></td>
@@ -187,6 +192,17 @@ stats = indexer.index(force=False, include_text_files=True)
 stats = indexer.index(force=True)
 ```
 
+Track indexing progress in your own UI with the progress callback:
+
+```python
+from vortexa.core.progress import IndexProgress
+
+def on_progress(event: IndexProgress) -> None:
+    print(f"{event.phase}: {event.current}/{event.total} {event.message}")
+
+stats = indexer.index(progress=on_progress)
+```
+
 ### Searching
 
 ```python
@@ -246,6 +262,66 @@ indexer.clear()   # Delete the persistent index
 
 <div align="center">
 
+## CLI Indexing and Status
+
+</div>
+
+Build or update the index without running a search. A realtime progress bar is
+drawn on stderr; stdout stays machine-readable JSON:
+
+```bash
+# Build or incrementally update the index (default: current directory)
+vortexa index
+
+# Index a specific repository and include Markdown/JSON/YAML
+vortexa index /path/to/project --include-text
+
+# Rebuild from scratch
+vortexa index --force
+
+# Check whether the index is ready (does not build anything)
+vortexa status
+
+# Human-readable status instead of JSON
+vortexa status --plain
+```
+
+Example progress output:
+
+```
+[vortexa] Indexing /path/to/project
+[vortexa] Scanning files: 128/210 (60%) ETA 1s — src/auth/middleware.py
+[vortexa] Embedding chunks: 512/940 (54%) ETA 4s
+[vortexa] ✓ 210 files · 940 chunks · 64 reused · 876 embedded (6.42s)
+```
+
+`vortexa index` prints JSON statistics by default:
+
+```json
+{
+  "root": "/path/to/project",
+  "model": "VTXAI/vtx-embed-7M-lf2",
+  "indexed_files": 210,
+  "total_chunks": 940,
+  "languages": {"python": 142, "typescript": 68},
+  "changed_files": 12,
+  "removed_files": 1,
+  "memo_hits": 64,
+  "embedded_chunks": 876,
+  "up_to_date": false,
+  "index_time_ms": 6418.2,
+  "errors": []
+}
+```
+
+Progress is suppressed with `--quiet` (both progress and summaries) or
+`--no-progress` (bar only). Both flags are also available on `search`,
+`resolve`, and `explain`.
+
+---
+
+<div align="center">
+
 ## CLI Search
 
 </div>
@@ -272,9 +348,12 @@ Useful flags:
 | `--root` | Codebase root to index and search. Overrides `environment_details`. |
 | `--top-k` | Maximum number of results to return. Default: `10`. |
 | `--alpha` | Semantic weight from `0.0` to `1.0`; defaults to adaptive weighting. |
+| `--min-score` | Drop results below this score. Zero-score noise is always removed. |
 | `--include-text` | Include text files such as `.md`, `.json`, and `.yaml` in the index. |
 | `--force` | Force a full re-index before searching. |
 | `--no-index` | Search the existing index only. |
+| `--quiet` | Suppress progress and index status messages on stderr. |
+| `--no-progress` | Hide the realtime indexing progress bar. |
 | `--plain` | Print human-readable results instead of JSON. |
 | `--model` | Embedding model ID or alias (`mini`, `nano`; both use LF2 by default). Use `mini-full` or `nano-full` for LF4. |
 | `-f`, `--fast` | Explicitly select LF2 for a full-model alias. The `mini` and `nano` aliases already use LF2. |
@@ -388,6 +467,12 @@ vortexa embed "Indian cricket team is strong" --model nano
 # Encode multiple strings
 vortexa embed "India has 28 states" "Chennai is in Tamil Nadu" --model nano
 
+# Truncate embeddings with Matryoshka
+vortexa embed "India has 28 states" --model nano --dim 64
+
+# Read one text string per line from a file
+vortexa embed --file queries.txt --model mini
+
 # Use a custom model ID
 vortexa embed "Indian monsoon patterns" --model VTXAI/vtx-embed-7M
 ```
@@ -408,24 +493,39 @@ python -m vortexa.interfaces.mcp_server
 vortexa serve
 ```
 
-On startup it indexes the current working directory and prints stats to stderr:
+On startup it indexes the current working directory and reports realtime
+progress on stderr:
 ```
-[vortexa] Indexing C:\projects\my-app ...
-[vortexa] Ready: 127 files, 843 chunks
+[vortexa] Indexing /projects/my-app
+[vortexa] Scanning files: 127/127 (100%) — src/main.py
+[vortexa] Embedding chunks: 843/843 (100%) ETA 0ms
+[vortexa] ✓ 127 files · 843 chunks · 0 reused · 843 embedded (2.41s)
+[vortexa] Ready: 127 files, 843 chunks in 2410ms
 [vortexa] Auto-reindex watcher started (polling every 3s)
 ```
 
-The server exposes three tools:
+The server exposes five tools:
 
 | Tool | Description | Arguments |
 |------|-------------|-----------|
-| `search` | Semantic + BM25 hybrid code search | `query` (str), `top_k` (int, default 10) |
+| `search` | Semantic + BM25 hybrid code search | `query` (str), `top_k` (int, default 10), `min_score` (float, default 0.0) |
 | `resolve` | Feature-level search with graph context, tests, imports, callers, and callees | `query` (str), `top_k` (int, default 5) |
 | `explain` | Explain a file, `file:line` location, or symbol | `location` (str) |
+| `status` | Check whether the index is ready, still indexing, empty, or failed | none |
+| `reindex` | Incrementally update or force-rebuild the index with MCP progress notifications | `force` (bool), `include_text` (bool or null) |
 
 Use `search` for discovery, `resolve` when you need feature context, and
-`explain` when the file or symbol is already known. The server indexes the
-current directory and auto-reindexes it while running.
+`explain` when the file or symbol is already known. Call `status` before relying
+on results while startup indexing may still be running, and use `reindex` only
+after large external changes. The server indexes the current directory and
+auto-reindexes it while running.
+
+You can also start the server for a specific root without changing directory:
+
+```bash
+vortexa serve --root /path/to/project --include-text
+vortexa serve --root /path/to/project --no-watch
+```
 
 ### Usage with Claude Code / Cursor
 
@@ -492,6 +592,7 @@ vortexa/
 │   ├── chunking.py      # AST-aware (tree-sitter) + line-based chunking
 │   ├── embedding.py     # Embedding model wrappers (Model2Vec, SentenceTransformers, LF4)
 │   ├── language.py      # Language detection & file extension mapping
+│   ├── progress.py      # UI-agnostic indexing progress events
 │   └── types.py         # Shared types (Chunk, ChunkConfig, IndexStats, SearchResult, ...)
 ├── storage/
 │   ├── vector_store.py  # LMDB-backed persistent vector store
@@ -502,8 +603,9 @@ vortexa/
 │   ├── ranking.py       # Result ranking & symbol query detection
 │   └── tokens.py        # Identifier tokenization (camelCase, snake_case)
 └── interfaces/
-    ├── cli.py           # Command-line search entrypoint
+    ├── cli.py           # Command-line index/search/status entrypoint
     ├── mcp_server.py    # MCP server (stdio transport)
+    ├── progress.py      # Realtime terminal/MCP progress bar renderer
     └── watcher.py       # Live file poller with debounced auto-reindex
 ```
 
