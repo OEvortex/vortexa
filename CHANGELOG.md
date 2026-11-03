@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.8] - Unreleased
+
+### Added
+- Realtime indexing progress bar on stderr for CLI and MCP, with UI-agnostic progress events (`vortexa.core.progress`, `vortexa.interfaces.progress`).
+- `vortexa index` command to build/update the index without running search, with `--force`, `--include-text`, `--quiet`, and `--no-progress`.
+- `vortexa status` command to report index readiness/state without building (JSON by default, `--plain` for human-readable output).
+- Global index root support and `clean` command for managing indexes.
+- MCP tools expanded to `search`, `resolve`, `explain`, `status`, and `reindex` (with progress notifications). `serve` now supports `--root` and `--no-watch`.
+- Progress callback API for programmatic indexing (`indexer.index(progress=...)`).
+- CLI flags: `--quiet`, `--no-progress`, `--min-score` (zero-score noise removed), `vortexa embed --dim` for Matryoshka truncation, `vortexa embed --file` for reading queries from a file.
+- Indexer runtime tests (`tests/test_indexer_runtime.py`).
+
+### Changed
+- Enhanced index directory structure and CLI command layout/usability.
+- Watcher now uses the same extension set as the index (avoids reindex loops on unindexed files); auto-reindex behavior improved.
+- Chunk hashing is now content-only (improves memoization/reuse when line numbers move or code is copied).
+- Documentation updated (README, docs/index.md) with progress, status/index commands, and MCP/server usage.
+
+### Fixed
+- Various indexing/watcher/MCP robustness improvements.
+
 ## [0.3.7] - 2026-10-26
 
 ### Fixed
